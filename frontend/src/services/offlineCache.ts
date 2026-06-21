@@ -1,58 +1,67 @@
-import { openDB } from 'idb'
-import type { DBSchema } from 'idb'
+import { openDB } from 'idb';
+import type { DBSchema } from 'idb';
+
+export interface PostDraft {
+    $id: string;
+    content: string;
+    $createdAt: string;
+    userId: string;
+    authorName: string;
+}
+
+export interface CachedPost {
+    $id: string;
+    content: string;
+    userId: string;
+    authorName: string;
+    $createdAt: string;
+}
 
 interface LocalDB extends DBSchema {
-  drafts: {
-    key: string;
-    value: {
-      id: string;
-      content: string;
-      createdAt: string;
+    drafts: {
+        key: string;
+        value: PostDraft;
     };
-  };
-  cachedPosts: {
-    key: string;
-    value: {
-      id: string;
-      content: string;
-      userId: string;
-      createdAt: string;
+    cachedPosts: {
+        key: string;
+        value: CachedPost;
     };
-  };
 }
 
-let dbPromise = openDB<LocalDB>('saltedhash-local', 1, {
-  upgrade(db) {
-    db.createObjectStore('drafts', { keyPath: '$id' })
-    db.createObjectStore('cachedPosts', { keyPath: '$id' })
-  }
-})
+const dbPromise = openDB<LocalDB>('saltedhash-local', 1, {
+    upgrade(db) {
+        db.createObjectStore('drafts', { keyPath: '$id' });
+        db.createObjectStore('cachedPosts', { keyPath: '$id' });
+    },
+});
 
 export const offlineCache = {
-  async saveDraft(draft: any) {
-    const db = await dbPromise;
-    await db.put('drafts', draft);
-  },
+    async saveDraft(draft: PostDraft) {
+        const db = await dbPromise;
+        await db.put('drafts', draft);
+    },
 
-  async getDrafts() {
-    const db = await dbPromise;
-    return db.getAll('drafts');
-  },
+    async getDrafts(): Promise<PostDraft[]> {
+        const db = await dbPromise;
+        return db.getAll('drafts');
+    },
 
-  async removeDraft(id: string) {
-    const db = await dbPromise;
-    await db.delete('drafts', id);
-  },
+    async removeDraft(id: string) {
+        const db = await dbPromise;
+        await db.delete('drafts', id);
+    },
 
-  async cachePosts(posts: any[]) {
-    const db = await dbPromise;
-    const tx = db.transaction('cachedPosts', 'readwrite');
-    posts.forEach(post => tx.store.put(post));
-    await tx.done;
-  },
+    async cachePosts(posts: CachedPost[]) {
+        const db = await dbPromise;
+        const tx = db.transaction('cachedPosts', 'readwrite');
+        await Promise.all([
+            ...posts.map((post) => tx.store.put(post)),
+            tx.done,
+        ]);
+    },
 
-  async getCachedPosts() {
-    const db = await dbPromise;
-    return db.getAll('cachedPosts');
-  }
-}
+    async getCachedPosts(): Promise<CachedPost[]> {
+        const db = await dbPromise;
+        return db.getAll('cachedPosts');
+    },
+};

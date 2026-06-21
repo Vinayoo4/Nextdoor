@@ -12,15 +12,33 @@ export const storage = new Storage(client);
 
 export { ID, Query };
 
+// Validate required env vars at startup
+const requiredEnvVars = [
+    'VITE_APPWRITE_DATABASE_ID',
+    'VITE_APPWRITE_POSTS_COLLECTION_ID',
+    'VITE_APPWRITE_COMMENTS_COLLECTION_ID',
+    'VITE_APPWRITE_BUSINESSES_COLLECTION_ID',
+    'VITE_APPWRITE_CIRCLES_COLLECTION_ID',
+    'VITE_APPWRITE_CHANNELS_COLLECTION_ID',
+    'VITE_APPWRITE_MESSAGES_COLLECTION_ID',
+    'VITE_APPWRITE_BUCKET_ID',
+];
+
+requiredEnvVars.forEach((key) => {
+    if (!import.meta.env[key]) {
+        console.error(`[APPWRITE CONFIG] Missing required environment variable: ${key}`);
+    }
+});
+
 export const APPWRITE_CONFIG = {
-    databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID || 'saltedhash_db',
+    databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID as string,
     collections: {
-        posts: import.meta.env.VITE_APPWRITE_POSTS_COLLECTION_ID || 'posts',
-        comments: import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID || 'comments',
-        businesses: import.meta.env.VITE_APPWRITE_BUSINESSES_COLLECTION_ID || 'businesses',
-        circles: import.meta.env.VITE_APPWRITE_CIRCLES_COLLECTION_ID || 'circles',
-        channels: import.meta.env.VITE_APPWRITE_CHANNELS_COLLECTION_ID || 'channels',
-        messages: import.meta.env.VITE_APPWRITE_MESSAGES_COLLECTION_ID || 'messages'
+        posts: import.meta.env.VITE_APPWRITE_POSTS_COLLECTION_ID as string,
+        comments: import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID as string,
+        businesses: import.meta.env.VITE_APPWRITE_BUSINESSES_COLLECTION_ID as string,
+        circles: import.meta.env.VITE_APPWRITE_CIRCLES_COLLECTION_ID as string,
+        channels: import.meta.env.VITE_APPWRITE_CHANNELS_COLLECTION_ID as string,
+        messages: import.meta.env.VITE_APPWRITE_MESSAGES_COLLECTION_ID as string,
     },
-    bucketId: import.meta.env.VITE_APPWRITE_BUCKET_ID || 'media'
+    bucketId: import.meta.env.VITE_APPWRITE_BUCKET_ID as string,
 };
