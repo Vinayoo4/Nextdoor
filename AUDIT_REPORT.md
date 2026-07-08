@@ -1,66 +1,46 @@
-# SALTEDHASH / Nextdoor — Code Audit Report
-**Date:** June 21, 2026 | **Auditor:** AI Expert Review
+# Production Audit Summary
 
-## Summary
-All critical production-blocking bugs have been fixed in this commit. See below for full details.
+## Completed Items
+- **Documentation & Setup:**
+  - Created `docs/APPWRITE_SETUP.md` outlining all required Appwrite collections, attributes, indexes, permissions, and platform domains based on current frontend code constraints.
+  - Created `docs/VERCEL_DEPLOYMENT.md` defining Vercel settings (Root Directory `frontend`, env vars, SPA rewrites).
+  - Authored a `node-appwrite` setup script template in `scripts/appwrite-setup.js` to facilitate server provisioning.
 
-## Fixes Applied in This Commit
+- **Data Layer & Offline Caching:**
+  - Refactored `services/offlineCache.ts` to include maximum limits (100 cached posts) and explicitly handled `syncStatus` (`pending`, `syncing`, `failed`) for draft entries.
+  - Resolved TypeScript `any` typings by creating `services/models.ts` with Appwrite models (`PostModel`, `CommentModel`, `BusinessModel`, `CircleModel`, `ChannelModel`, `MessageModel`).
+  - Auth store fully typed and mapped Appwrite auth events safely without throwing raw objects.
 
-### ✅ FIX-1: offlineCache.ts — Corrected DBSchema types
-- `PostDraft` and `CachedPost` interfaces now use `$id`, `$createdAt`, `userId`, `authorName` to match actual Appwrite document structure and `Home.vue` usage.
-- `cachePosts()` now uses `Promise.all()` for proper async transaction handling.
+- **Routing and UI Integration:**
+  - Configured Vue Router for missing paths, establishing `/profile` and `/businesses/:id`.
+  - Added `Profile.vue` matching the prevailing Tailwind aesthetic.
+  - Fixed `BusinessDetail.vue` to load a single Appwrite entity or elegantly fallback if none are found.
+  - Configured `App.vue` to show a proper `authStore.isInitialized` loading state before painting the layout.
+  - Bottom navigation active states correctly styled.
 
-### ✅ FIX-2: appwrite.ts — Removed dangerous hardcoded collection ID fallbacks
-- All collection IDs now read exclusively from env vars (`VITE_APPWRITE_*_COLLECTION_ID`).
-- Added startup validation that logs an error for each missing required env var.
-- Endpoint and Project ID retain safe fallbacks (these are non-sensitive project identifiers).
+- **Feature Hardening:**
+  - `Home.vue`: Added post deletion for the logged-in post owner, structured paginated fetches instead of limitless loading, and stabilized offline syncing to prevent infinite loop errors.
+  - `Businesses.vue`: Wired a local filter/search implementation to reduce API lookups. Fully connected "View Details" to router navigation.
+  - `Circles.vue`: Hardened messaging, adding background polling mechanism when viewing a channel and correctly tearing it down upon component unmount or leaving the channel.
+  - `Offline.vue`: Removed native browser `alert()`s in favor of an inline UI feedback banner.
 
-### ✅ FIX-3: vercel.json — Added SPA rewrite rules
-- All routes now redirect to `/index.html` so Vue Router handles them.
-- Without this, direct navigation to `/businesses`, `/circles`, etc. would return 404 on Vercel.
+- **Testing:**
+  - Nuked the legacy `test-e2e.js`.
+  - Integrated `@playwright/test` workspace in `frontend`.
+  - Added deterministic, condition-based specs testing Authentication, Feed offline/sync handling, and Businesses routing.
 
-### ✅ FIX-4: public/offline.html — Added PWA offline fallback
-- Workbox `navigateFallback: '/offline.html'` now has a matching static file.
-- Shows friendly offline message with retry button.
+## Intentionally Deferred
+- Realtime Appwrite Integration (WebSockets): Implemented robust interval polling with automatic cleanup rather than adding WebSockets, which would alter the fundamental current architecture slightly and increase immediate deployment complexity.
 
-### ✅ FIX-5: Login.vue — Added client-side input validation
-- Email, password (min 8 chars), and name (on register) are validated before API calls.
-- Error messages are user-friendly.
+## Risks
+- Depending on Vercel deployment constraints, running E2E tests against a fully live Appwrite production backend requires properly scoped staging endpoints to prevent polluted user data.
+- IndexedDB storage caps might need granular adjustment depending on average post character length.
 
-## Remaining Action Items (Manual)
-
-### 🔴 Critical — Must do before deployment
-1. **Create Appwrite Collections** with these exact fields:
-   - `posts`: `content` (string), `userId` (string), `authorName` (string)
-   - `comments`: `content` (string), `postId` (string), `userId` (string), `authorName` (string)
-   - `businesses`: `name` (string), `category` (string), `shortDescription` (string)
-   - `circles`: `name` (string), `description` (string)
-   - `channels`: `name` (string), `circleId` (string)
-   - `messages`: `content` (string), `channelId` (string), `userId` (string), `authorName` (string)
-
-2. **Set Vercel Environment Variables:**
-   ```
-   VITE_APPWRITE_DATABASE_ID=<your-db-id>
-   VITE_APPWRITE_POSTS_COLLECTION_ID=<id>
-   VITE_APPWRITE_COMMENTS_COLLECTION_ID=<id>
-   VITE_APPWRITE_BUSINESSES_COLLECTION_ID=<id>
-   VITE_APPWRITE_CIRCLES_COLLECTION_ID=<id>
-   VITE_APPWRITE_CHANNELS_COLLECTION_ID=<id>
-   VITE_APPWRITE_MESSAGES_COLLECTION_ID=<id>
-   VITE_APPWRITE_BUCKET_ID=<id>
-   ```
-
-3. **Add Vercel domain to Appwrite Platforms** (Appwrite Console → Settings → Platforms → Add Web):
-   - Add your `*.vercel.app` URL to prevent CORS errors.
-
-4. **Enable Email/Password Auth** in Appwrite Console → Auth → Email/Password.
-
-### 🟡 High Priority
-5. Add PWA icons: `frontend/public/icons/icon-192x192.png` and `icon-512x512.png`
-6. Add Business Detail page (`/businesses/:id`) with a real route and data fetch
-
-### Vercel Build Settings
-- **Root Directory:** `frontend`
-- **Build Command:** `npm run build`
-- **Output Directory:** `dist`
-- **Install Command:** `npm install`
+## Definition of Done (DoD)
+- No dead UI actions remaining.
+- No missing visible route targets.
+- No broken PWA asset references.
+- No stale messaging behavior.
+- No major any-typed states left.
+- Complete type safety matching Appwrite models.
+- Vercel routing fully prepared for SPA deployment with rewritten rules.

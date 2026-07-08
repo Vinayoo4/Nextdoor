@@ -4,7 +4,9 @@ import { useAuthStore } from '../stores/auth'
 const Home = () => import('../pages/Home.vue')
 const Login = () => import('../pages/Login.vue')
 const Businesses = () => import('../pages/Businesses.vue')
+const BusinessDetail = () => import('../pages/BusinessDetail.vue')
 const Circles = () => import('../pages/Circles.vue')
+const Profile = () => import('../pages/Profile.vue')
 const Offline = () => import('../pages/Offline.vue')
 const NotFound = () => import('../pages/NotFound.vue')
 
@@ -30,9 +32,21 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/businesses/:id',
+      name: 'BusinessDetail',
+      component: BusinessDetail,
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/circles',
       name: 'Circles',
       component: Circles,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/profile',
+      name: 'Profile',
+      component: Profile,
       meta: { requiresAuth: true }
     },
     {
