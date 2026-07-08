@@ -6,6 +6,11 @@
       </svg>
       <h2 class="text-2xl font-bold text-gray-900 mb-2">You're Offline</h2>
       <p class="text-gray-500 mb-6">It looks like you've lost your connection. We've cached some content for you, or you can try reconnecting.</p>
+
+      <div v-if="checkError" class="mb-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-100">
+        Still offline. Please check your connection.
+      </div>
+
       <div class="space-y-3">
         <button @click="retry" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
           Try Again
@@ -19,15 +24,21 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const checkError = ref(false)
 
 const retry = () => {
   if (navigator.onLine) {
+    checkError.value = false
     router.go(-1)
   } else {
-    alert('Still offline. Please check your connection.')
+    checkError.value = true
+    setTimeout(() => {
+      checkError.value = false
+    }, 3000)
   }
 }
 </script>

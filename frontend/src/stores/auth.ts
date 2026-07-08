@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { account } from '../services/appwrite'
+import type { Models } from 'appwrite'
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
-  const user = ref<any>(null)
+  const user = ref<Models.User<Models.Preferences> | null>(null)
   const isInitialized = ref(false)
 
   async function checkAuth() {

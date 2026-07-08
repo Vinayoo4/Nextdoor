@@ -7,3 +7,5 @@ node_modules/
 data/app.db*
 frontend/dist/
 backend/dist/
+frontend/playwright-report/
+frontend/test-results/
