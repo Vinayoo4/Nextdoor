@@ -13,64 +13,14 @@ const NotFound = () => import('../pages/NotFound.vue')
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: '/',
-      name: 'Home',
-      component: Home,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/login',
-      name: 'Login',
-      component: Login,
-      meta: { requiresAuth: false },
-    },
-    {
-      path: '/businesses',
-      name: 'Businesses',
-      component: Businesses,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/businesses/:id',
-      name: 'BusinessDetail',
-      component: BusinessDetail,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/businesses/:id',
-      name: 'BusinessDetail',
-      component: BusinessDetail,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/circles',
-      name: 'Circles',
-      component: Circles,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/profile',
-      name: 'Profile',
-      component: Profile,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/profile',
-      name: 'Profile',
-      component: Profile,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/offline',
-      name: 'Offline',
-      component: Offline,
-    },
-    {
-      path: '/:pathMatch(.*)*',
-      name: 'NotFound',
-      component: NotFound,
-    },
+    { path: '/', name: 'Home', component: Home, meta: { requiresAuth: true } },
+    { path: '/login', name: 'Login', component: Login, meta: { requiresAuth: false } },
+    { path: '/businesses', name: 'Businesses', component: Businesses, meta: { requiresAuth: true } },
+    { path: '/businesses/:id', name: 'BusinessDetail', component: BusinessDetail, meta: { requiresAuth: true } },
+    { path: '/circles', name: 'Circles', component: Circles, meta: { requiresAuth: true } },
+    { path: '/profile', name: 'Profile', component: Profile, meta: { requiresAuth: true } },
+    { path: '/offline', name: 'Offline', component: Offline },
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: NotFound },
   ],
 })
 

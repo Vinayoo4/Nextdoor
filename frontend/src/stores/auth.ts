@@ -2,11 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { ID, type Models } from 'appwrite'
 import { account } from '../services/appwrite'
-<<<<<<< Updated upstream
-import type { Models } from 'appwrite'
-=======
 import { mapAppwriteError } from '../utils/appwriteErrors'
->>>>>>> Stashed changes
 
 export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(false)
@@ -87,7 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function deleteAccount(): Promise<string | null> {
     try {
-      await account.delete()
+      await account.deleteSessions()
       isAuthenticated.value = false
       user.value = null
       return null

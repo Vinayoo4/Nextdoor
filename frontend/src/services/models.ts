@@ -4,6 +4,7 @@ export interface PostModel extends Models.Document {
     content: string;
     userId: string;
     authorName: string;
+    imageId?: string;
 }
 
 export interface CommentModel extends Models.Document {
@@ -17,6 +18,10 @@ export interface BusinessModel extends Models.Document {
     name: string;
     category: string;
     shortDescription?: string;
+    description?: string;
+    phone?: string;
+    email?: string;
+    imageId?: string;
 }
 
 export interface CircleModel extends Models.Document {

@@ -1,20 +1,5 @@
 <template>
   <div class="space-y-6">
-<<<<<<< Updated upstream
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-16 z-10">
-      <div class="flex items-start space-x-3">
-        <div class="flex-shrink-0">
-          <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-800 font-bold">
-            {{ authStore.user?.name ? authStore.user.name[0].toUpperCase() : '?' }}
-          </div>
-        </div>
-        <div class="min-w-0 flex-1">
-          <textarea v-model="newPostContent" rows="3" class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm resize-none p-3 border" placeholder="What's happening in your neighborhood?" :disabled="creatingPost"></textarea>
-        </div>
-      </div>
-      <div class="mt-3 flex justify-end">
-        <button @click="createPost" :disabled="!newPostContent || creatingPost" :class="['inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white', newPostContent && !creatingPost ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 cursor-not-allowed']">
-=======
     <div class="bg-white shadow rounded-xl p-4 border border-gray-100">
       <div class="flex items-start space-x-4">
         <div class="flex-shrink-0">
@@ -50,7 +35,6 @@
           :disabled="!newPostContent.trim() || creatingPost || uploadingImage"
           :class="['inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-full shadow-sm text-white', newPostContent.trim() && !creatingPost ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-indigo-300 cursor-not-allowed']"
         >
->>>>>>> Stashed changes
           {{ creatingPost ? 'Posting...' : 'Post' }}
         </button>
       </div>
@@ -87,45 +71,18 @@
     </div>
 
     <div v-else-if="error && posts.length === 0" class="text-center py-10 bg-white shadow rounded-xl border border-gray-100">
-      <p class="text-sm text-red-600 mb-2">Failed to load posts. Displaying cached data if available.</p>
-      <button @click="() => fetchPosts(true)" class="text-indigo-600 text-sm font-medium hover:underline">Retry Connection</button>
+      <p class="text-sm text-red-600 mb-2">Failed to load posts.</p>
+      <button @click="fetchPosts" class="text-indigo-600 text-sm font-medium hover:underline">Retry</button>
     </div>
 
     <div v-else class="space-y-4">
       <div v-for="post in posts" :key="post.$id" class="bg-white shadow rounded-xl p-5 border border-gray-100 hover:shadow-md transition-shadow">
-        <div class="flex space-x-3 justify-between">
-          <div class="flex space-x-3">
-            <div class="flex-shrink-0">
-              <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
-                {{ post.authorName ? post.authorName[0].toUpperCase() : 'A' }}
-              </div>
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-gray-900">
-                {{ post.authorName }}
-              </p>
-              <p class="text-xs text-gray-500">
-                {{ new Date(post.$createdAt).toLocaleString() }}
-              </p>
+        <div class="flex space-x-3">
+          <div class="flex-shrink-0">
+            <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
+              {{ post.authorName ? post.authorName[0].toUpperCase() : 'A' }}
             </div>
           </div>
-<<<<<<< Updated upstream
-          <!-- Delete button for own posts -->
-          <div v-if="post.userId === authStore.user?.$id && !post.$id.startsWith('draft-')">
-            <button @click="deletePost(post.$id)" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete post">
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="mt-4 text-gray-800 whitespace-pre-wrap">{{ post.content }}</div>
-
-        <div v-if="!post.$id.startsWith('draft-')" class="mt-4 pt-4 border-t border-gray-100">
-           <div class="flex items-center space-x-2 text-gray-500 text-sm mb-2 cursor-pointer hover:text-indigo-600 transition-colors" @click="toggleComments(post.$id)">
-             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-             <span>{{ activeComments[post.$id] ? 'Hide Comments' : 'Show Comments' }}</span>
-           </div>
-=======
           <div class="min-w-0 flex-1">
             <div class="flex justify-between items-start">
               <div>
@@ -152,10 +109,9 @@
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
             <span>{{ activeComments[post.$id] ? 'Hide Comments' : 'Show Comments' }}</span>
           </div>
->>>>>>> Stashed changes
 
           <div v-if="activeComments[post.$id]">
-            <div v-if="commentsLoading[post.$id]" class="text-xs text-gray-400 my-2">Loading...</div>
+            <div v-if="commentsLoading[post.$id]" class="text-xs text-gray-400 my-2">Loading comments...</div>
             <div v-else class="space-y-3 mb-3">
               <div v-for="comment in postComments[post.$id] ?? []" :key="comment.$id" class="bg-gray-50 p-3 rounded-lg text-sm border border-gray-100">
                 <div class="font-medium text-gray-800 mb-1 flex justify-between">
@@ -183,13 +139,6 @@
         <p class="mt-1 text-sm text-gray-500">Be the first to share something in your neighborhood!</p>
       </div>
 
-<<<<<<< Updated upstream
-      <div v-if="hasMorePosts && !error && posts.length > 0" class="flex justify-center mt-4 pb-4">
-        <button @click="() => fetchPosts(false)" :disabled="loading" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
-          {{ loading ? 'Loading...' : 'Load More' }}
-        </button>
-      </div>
-=======
       <button
         v-if="hasMore"
         @click="loadMore"
@@ -198,7 +147,6 @@
       >
         {{ loadingMore ? 'Loading...' : 'Load more' }}
       </button>
->>>>>>> Stashed changes
     </div>
   </div>
 </template>
@@ -208,16 +156,11 @@ import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { databases, storage, APPWRITE_CONFIG, ID, Query, getFilePreviewUrl } from '../services/appwrite'
 import { offlineCache } from '../services/offlineCache'
-<<<<<<< Updated upstream
-import type { PostDraft } from '../services/offlineCache'
-import type { PostModel, CommentModel } from '../services/models'
-=======
 import type { Post, Comment, PostDraft } from '../types/appwrite'
 import { formatDateTime, formatDate } from '../utils/formatDate'
 
 const PAGE_SIZE = 20
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024
->>>>>>> Stashed changes
 
 const authStore = useAuthStore()
 const posts = ref<Post[]>([])
@@ -226,13 +169,9 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const error = ref(false)
 const creatingPost = ref(false)
-<<<<<<< Updated upstream
-const hasMorePosts = ref(true)
-=======
 const deletingPostId = ref<string | null>(null)
 const hasMore = ref(false)
 const lastCursor = ref<string | null>(null)
->>>>>>> Stashed changes
 
 const offlineDrafts = ref<PostDraft[]>([])
 const syncing = ref(false)
@@ -244,76 +183,21 @@ const uploadingImage = ref(false)
 const imageError = ref('')
 
 const activeComments = ref<Record<string, boolean>>({})
-<<<<<<< Updated upstream
-const postComments = ref<Record<string, CommentModel[]>>({})
-const commentsLoading = ref<Record<string, boolean>>({})
-const newComment = ref<Record<string, string>>({})
-
-const fetchPosts = async (reset = true) => {
-  if (reset) {
-    loading.value = true
-    posts.value = offlineDrafts.value // Show drafts at top first
-  } else {
-    loading.value = true
-  }
-
-=======
 const postComments = ref<Record<string, Comment[]>>({})
 const commentsLoading = ref<Record<string, boolean>>({})
 const newComment = ref<Record<string, string>>({})
 
 const buildQueries = (cursor: string | null) => {
   const queries = [Query.orderDesc('$createdAt'), Query.limit(PAGE_SIZE)]
-  if (cursor) {
-    queries.push(Query.cursorAfter(cursor))
-  }
+  if (cursor) queries.push(Query.cursorAfter(cursor))
   return queries
 }
 
 const fetchPosts = async () => {
   loading.value = true
->>>>>>> Stashed changes
   error.value = false
 
   try {
-<<<<<<< Updated upstream
-    const queries = [Query.orderDesc('$createdAt'), Query.limit(20)]
-    // If not reset, we use pagination with cursorAfter
-    if (!reset && posts.value.length > 0) {
-      // Find the last real post (not draft)
-      const realPosts = posts.value.filter(p => !p.$id.startsWith('draft-'))
-      if (realPosts.length > 0) {
-        queries.push(Query.cursorAfter(realPosts[realPosts.length - 1].$id))
-      }
-    }
-
-    const response = await databases.listDocuments<PostModel>(
-      APPWRITE_CONFIG.databaseId,
-      APPWRITE_CONFIG.collections.posts,
-      queries
-    )
-
-    if (reset) {
-      posts.value = [...offlineDrafts.value, ...response.documents]
-      await offlineCache.cachePosts(response.documents)
-    } else {
-      posts.value = [...posts.value, ...response.documents]
-    }
-
-    hasMorePosts.value = response.documents.length === 20
-
-    // Auto sync on successful fetch
-    await checkDrafts()
-    if (offlineDrafts.value.length > 0) {
-      syncDrafts() // run in background
-    }
-  } catch (err) {
-    console.warn('Network fetch failed, loading from local cache', err)
-    if (reset) {
-      const cached = await offlineCache.getCachedPosts()
-      posts.value = [...offlineDrafts.value, ...cached]
-    }
-=======
     const response = await databases.listDocuments<Post>(
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.collections.posts,
@@ -330,7 +214,6 @@ const fetchPosts = async () => {
   } catch (err) {
     console.warn('Network fetch failed, loading from local cache', err)
     posts.value = await offlineCache.getCachedPosts() as Post[]
->>>>>>> Stashed changes
     error.value = true
   } finally {
     loading.value = false
@@ -365,34 +248,6 @@ const checkDrafts = async () => {
 const syncDrafts = async () => {
   if (syncing.value || offlineDrafts.value.length === 0) return
   syncing.value = true
-<<<<<<< Updated upstream
-  try {
-    for (const draft of offlineDrafts.value) {
-      if (draft.syncStatus === 'syncing') continue; // Prevent loop
-
-      draft.syncStatus = 'syncing'
-      await offlineCache.saveDraft(draft) // update state
-
-      try {
-        await databases.createDocument(
-          APPWRITE_CONFIG.databaseId,
-          APPWRITE_CONFIG.collections.posts,
-          ID.unique(),
-          {
-            content: draft.content,
-            userId: draft.userId,
-            authorName: draft.authorName.replace(' (Draft)', '')
-          }
-        )
-        await offlineCache.removeDraft(draft.$id)
-      } catch (e) {
-        draft.syncStatus = 'failed'
-        await offlineCache.saveDraft(draft)
-      }
-    }
-    await checkDrafts()
-    await fetchPosts(true)
-=======
   const drafts = [...offlineDrafts.value]
 
   for (const draft of drafts) {
@@ -432,12 +287,10 @@ const onImageSelect = async (event: Event) => {
 
   if (!file.type.startsWith('image/')) {
     imageError.value = 'Only image files are allowed.'
-    input.value = ''
     return
   }
   if (file.size > MAX_IMAGE_SIZE) {
     imageError.value = 'Image must be under 5 MB.'
-    input.value = ''
     return
   }
 
@@ -452,14 +305,12 @@ const onImageSelect = async (event: Event) => {
       file
     )
     selectedImageId.value = uploaded.$id
->>>>>>> Stashed changes
   } catch (err) {
     console.error('Image upload failed', err)
     imageError.value = 'Failed to upload image. Try again.'
     clearImage()
   } finally {
     uploadingImage.value = false
-    input.value = ''
   }
 }
 
@@ -472,9 +323,6 @@ const clearImage = () => {
 }
 
 const createPost = async () => {
-<<<<<<< Updated upstream
-  if (!newPostContent.value || !authStore.user) return
-=======
   const content = newPostContent.value.trim()
   if (!content) return
 
@@ -482,7 +330,6 @@ const createPost = async () => {
   const authorName = authStore.user?.name
   if (!userId || !authorName) return
 
->>>>>>> Stashed changes
   creatingPost.value = true
 
   try {
@@ -496,29 +343,19 @@ const createPost = async () => {
       payload
     )
     newPostContent.value = ''
-<<<<<<< Updated upstream
-    await fetchPosts(true)
-=======
     clearImage()
     await fetchPosts()
     await syncDrafts()
->>>>>>> Stashed changes
   } catch (err) {
     console.warn('Network down, saving as draft offline', err)
     const draft: PostDraft = {
       $id: `draft-${Date.now()}`,
       content: newPostContent.value,
       $createdAt: new Date().toISOString(),
-<<<<<<< Updated upstream
-      userId: authStore.user.$id,
-      authorName: authStore.user.name + ' (Draft)',
-      syncStatus: 'pending'
-=======
       userId,
       authorName: authorName + ' (Draft)',
       imageId: selectedImageId.value ?? undefined,
       syncStatus: 'pending',
->>>>>>> Stashed changes
     }
     await offlineCache.saveDraft(draft)
     posts.value.unshift(draft as unknown as Post)
@@ -531,41 +368,25 @@ const createPost = async () => {
 }
 
 const deletePost = async (postId: string) => {
-<<<<<<< Updated upstream
-  if (!confirm('Are you sure you want to delete this post?')) return;
-
-=======
   deletingPostId.value = postId
->>>>>>> Stashed changes
   try {
     await databases.deleteDocument(
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.collections.posts,
       postId
     )
-<<<<<<< Updated upstream
-    posts.value = posts.value.filter(p => p.$id !== postId)
-  } catch (err) {
-    console.error('Failed to delete post', err)
-    alert('Failed to delete post.')
-=======
     posts.value = posts.value.filter((p) => p.$id !== postId)
   } catch (err) {
     console.error('Failed to delete post', err)
   } finally {
     deletingPostId.value = null
->>>>>>> Stashed changes
   }
 }
 
 const fetchComments = async (postId: string) => {
   commentsLoading.value[postId] = true
   try {
-<<<<<<< Updated upstream
-    const response = await databases.listDocuments<CommentModel>(
-=======
     const response = await databases.listDocuments<Comment>(
->>>>>>> Stashed changes
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.collections.comments,
       [Query.equal('postId', postId), Query.orderAsc('$createdAt')]
@@ -586,13 +407,8 @@ const toggleComments = async (postId: string) => {
 }
 
 const postComment = async (postId: string) => {
-<<<<<<< Updated upstream
-  const content = newComment.value[postId]
-  if (!content || !authStore.user) return
-=======
   const content = newComment.value[postId]?.trim()
   if (!content) return
->>>>>>> Stashed changes
 
   const userId = authStore.user?.$id
   const authorName = authStore.user?.name
@@ -614,6 +430,6 @@ const postComment = async (postId: string) => {
 
 onMounted(async () => {
   await checkDrafts()
-  await fetchPosts(true)
+  await fetchPosts()
 })
 </script>

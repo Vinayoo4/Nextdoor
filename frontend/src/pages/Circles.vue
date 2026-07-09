@@ -33,11 +33,7 @@
       </div>
 
       <div v-else class="space-y-4">
-<<<<<<< Updated upstream
-        <button @click="backToCircles" class="text-indigo-600 flex items-center space-x-1 hover:text-indigo-800 text-sm font-medium">
-=======
         <button @click="goBackToCircles" class="text-indigo-600 flex items-center space-x-1 hover:text-indigo-800 text-sm font-medium">
->>>>>>> Stashed changes
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
           <span>Back to Circles</span>
         </button>
@@ -47,37 +43,6 @@
         <div v-if="channelsLoading" class="text-xs text-gray-400 my-2">Loading channels...</div>
 
         <div v-for="channel in channels" :key="channel.$id" class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden p-5">
-<<<<<<< Updated upstream
-           <div class="flex justify-between items-center cursor-pointer hover:text-indigo-600 transition-colors" @click="toggleChannel(channel.$id)">
-             <h4 class="text-md font-bold text-gray-800 flex items-center">
-               <span class="text-gray-400 mr-2">#</span> {{ channel.name }}
-             </h4>
-             <svg class="h-5 w-5 text-gray-400" :class="{'transform rotate-180': activeChannels[channel.$id]}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-           </div>
-
-           <!-- Messages -->
-           <div v-if="activeChannels[channel.$id]" class="mt-4 pt-4 border-t border-gray-100">
-             <div v-if="messagesLoading[channel.$id]" class="text-xs text-gray-400 my-2">Loading messages...</div>
-             <div v-else class="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2" :id="'messages-'+channel.$id">
-               <div v-for="msg in channelMessages[channel.$id] || []" :key="msg.$id" class="bg-gray-50 p-3 rounded-lg text-sm border border-gray-100">
-                 <div class="font-medium text-gray-800 mb-1 flex justify-between">
-                   <span>{{ msg.authorName }}</span>
-                   <span class="text-xs text-gray-400 font-normal">{{ new Date(msg.$createdAt).toLocaleTimeString() }}</span>
-                 </div>
-                 <p class="text-gray-600">{{ msg.content }}</p>
-               </div>
-               <p v-if="!(channelMessages[channel.$id] || []).length" class="text-xs text-gray-400 italic text-center py-2">No messages yet. Say hello!</p>
-             </div>
-
-             <div class="flex items-center space-x-2">
-               <input v-model="newMessage[channel.$id]" type="text" placeholder="Message..." class="flex-1 rounded-full border-gray-300 bg-gray-50 text-sm px-4 py-2 border focus:ring-indigo-500 focus:border-indigo-500" @keyup.enter="postMessage(channel.$id)">
-               <button @click="postMessage(channel.$id)" :disabled="!newMessage[channel.$id] || postingMessage[channel.$id]" class="bg-indigo-600 text-white rounded-full p-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0 transition-opacity">
-                 <svg v-if="!postingMessage[channel.$id]" class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                 <div v-else class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-               </button>
-             </div>
-           </div>
-=======
           <div class="flex justify-between items-center mb-4 cursor-pointer hover:text-indigo-600 transition-colors" @click="toggleChannel(channel.$id)">
             <h4 class="text-md font-bold text-gray-800 flex items-center">
               <span class="text-gray-400 mr-2">#</span> {{ channel.name }}
@@ -108,7 +73,6 @@
               </button>
             </div>
           </div>
->>>>>>> Stashed changes
         </div>
 
         <div v-if="!channelsLoading && channels.length === 0" class="text-center py-10 bg-white shadow rounded-xl border border-gray-100">
@@ -120,17 +84,6 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< Updated upstream
-import { ref, onMounted, nextTick, onUnmounted } from 'vue'
-import { useAuthStore } from '../stores/auth'
-import { databases, APPWRITE_CONFIG, ID, Query } from '../services/appwrite'
-import type { CircleModel, ChannelModel, MessageModel } from '../services/models'
-
-const authStore = useAuthStore()
-const circles = ref<CircleModel[]>([])
-const channels = ref<ChannelModel[]>([])
-const selectedCircle = ref<CircleModel | null>(null)
-=======
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { client, databases, APPWRITE_CONFIG, ID, Query } from '../services/appwrite'
@@ -143,22 +96,12 @@ const authStore = useAuthStore()
 const circles = ref<Circle[]>([])
 const channels = ref<Channel[]>([])
 const selectedCircle = ref<Circle | null>(null)
->>>>>>> Stashed changes
 const loading = ref(true)
 const error = ref(false)
 const channelsLoading = ref(false)
 
 const channelCache = new Map<string, Channel[]>()
 const activeChannels = ref<Record<string, boolean>>({})
-<<<<<<< Updated upstream
-const channelMessages = ref<Record<string, MessageModel[]>>({})
-const messagesLoading = ref<Record<string, boolean>>({})
-const newMessage = ref<Record<string, string>>({})
-const postingMessage = ref<Record<string, boolean>>({})
-
-// Polling interval
-let pollInterval: any = null
-=======
 const channelMessages = ref<Record<string, Message[]>>({})
 const messagesLoading = ref<Record<string, boolean>>({})
 const newMessage = ref<Record<string, string>>({})
@@ -180,17 +123,12 @@ const scrollToBottom = async (channelId: string) => {
     container.scrollTop = container.scrollHeight
   }
 }
->>>>>>> Stashed changes
 
 const fetchCircles = async () => {
   loading.value = true
   error.value = false
   try {
-<<<<<<< Updated upstream
-    const response = await databases.listDocuments<CircleModel>(
-=======
     const response = await databases.listDocuments<Circle>(
->>>>>>> Stashed changes
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.collections.circles
     )
@@ -203,17 +141,6 @@ const fetchCircles = async () => {
   }
 }
 
-<<<<<<< Updated upstream
-const backToCircles = () => {
-  selectedCircle.value = null
-  channels.value = []
-  activeChannels.value = {}
-  channelMessages.value = {}
-  stopPolling()
-}
-
-const selectCircle = async (circle: CircleModel) => {
-=======
 const fetchChannelsForCircle = async (circleId: string) => {
   const response = await databases.listDocuments<Channel>(
     APPWRITE_CONFIG.databaseId,
@@ -227,25 +154,15 @@ const fetchChannelsForCircle = async (circleId: string) => {
 const selectCircle = async (circle: Circle) => {
   teardownSubscriptions()
   channels.value = []
->>>>>>> Stashed changes
   selectedCircle.value = circle
   channelsLoading.value = true
 
   try {
-<<<<<<< Updated upstream
-    const response = await databases.listDocuments<ChannelModel>(
-      APPWRITE_CONFIG.databaseId,
-      APPWRITE_CONFIG.collections.channels,
-      [Query.equal('circleId', circle.$id)]
-    )
-    channels.value = response.documents
-=======
     if (channelCache.has(circle.$id)) {
       channels.value = channelCache.get(circle.$id) ?? []
     } else {
       channels.value = await fetchChannelsForCircle(circle.$id)
     }
->>>>>>> Stashed changes
   } catch (err) {
     console.error('Failed to fetch channels', err)
   } finally {
@@ -253,12 +170,6 @@ const selectCircle = async (circle: Circle) => {
   }
 }
 
-<<<<<<< Updated upstream
-const fetchMessages = async (channelId: string, background = false) => {
-  if (!background) messagesLoading.value[channelId] = true
-  try {
-    const response = await databases.listDocuments<MessageModel>(
-=======
 const goBackToCircles = () => {
   teardownSubscriptions()
   selectedCircle.value = null
@@ -270,26 +181,16 @@ const fetchMessages = async (channelId: string) => {
   messagesLoading.value[channelId] = true
   try {
     const response = await databases.listDocuments<Message>(
->>>>>>> Stashed changes
       APPWRITE_CONFIG.databaseId,
       APPWRITE_CONFIG.collections.messages,
       [Query.equal('channelId', channelId), Query.orderAsc('$createdAt')]
     )
     channelMessages.value[channelId] = response.documents
-<<<<<<< Updated upstream
-
-    if (!background) {
-      await nextTick()
-      const el = document.getElementById('messages-' + channelId)
-      if (el) el.scrollTop = el.scrollHeight
-    }
-=======
     await scrollToBottom(channelId)
->>>>>>> Stashed changes
   } catch (err) {
     console.error('Failed to fetch messages', err)
   } finally {
-    if (!background) messagesLoading.value[channelId] = false
+    messagesLoading.value[channelId] = false
   }
 }
 
@@ -356,34 +257,6 @@ const teardownSubscriptions = () => {
 }
 
 const toggleChannel = async (channelId: string) => {
-<<<<<<< Updated upstream
-  activeChannels.value[channelId] = !activeChannels.value[channelId]
-  if (activeChannels.value[channelId]) {
-    await fetchMessages(channelId)
-    startPolling(channelId)
-  } else {
-    // Stop polling if we close the channel (in a simplified way we just poll all open channels)
-  }
-}
-
-const startPolling = (_channelId: string) => {
-  if (!pollInterval) {
-    pollInterval = setInterval(() => {
-      // Poll all active channels
-      Object.keys(activeChannels.value).forEach(id => {
-        if (activeChannels.value[id]) {
-          fetchMessages(id, true)
-        }
-      })
-    }, 5000)
-  }
-}
-
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
-=======
   const isOpening = !activeChannels.value[channelId]
   activeChannels.value[channelId] = isOpening
 
@@ -394,17 +267,10 @@ const stopPolling = () => {
     setupRealtime(channelId)
   } else {
     teardownSubscriptions()
->>>>>>> Stashed changes
   }
 }
 
 const postMessage = async (channelId: string) => {
-<<<<<<< Updated upstream
-  const content = newMessage.value[channelId]
-  if (!content || !authStore.user) return
-
-  postingMessage.value[channelId] = true
-=======
   const content = newMessage.value[channelId]?.trim()
   if (!content) return
 
@@ -412,7 +278,6 @@ const postMessage = async (channelId: string) => {
   const authorName = authStore.user?.name
   if (!userId || !authorName) return
 
->>>>>>> Stashed changes
   try {
     const created = await databases.createDocument<Message>(
       APPWRITE_CONFIG.databaseId,
@@ -421,22 +286,13 @@ const postMessage = async (channelId: string) => {
       { content, channelId, userId, authorName }
     )
     newMessage.value[channelId] = ''
-<<<<<<< Updated upstream
-    await fetchMessages(channelId)
-    await nextTick()
-    const el = document.getElementById('messages-' + channelId)
-    if (el) el.scrollTop = el.scrollHeight
-=======
     if (usingRealtime) {
       appendMessage(channelId, created)
     } else {
       await fetchMessages(channelId)
     }
->>>>>>> Stashed changes
   } catch (err) {
     console.error('Failed to post message', err)
-  } finally {
-    postingMessage.value[channelId] = false
   }
 }
 
@@ -445,10 +301,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-<<<<<<< Updated upstream
-  stopPolling()
-=======
   teardownSubscriptions()
->>>>>>> Stashed changes
 })
 </script>
