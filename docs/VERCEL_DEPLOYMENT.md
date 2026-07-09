@@ -1,35 +1,3 @@
-<<<<<<< Updated upstream
-# Vercel Deployment Checklist
-
-This document details the configuration required to correctly deploy the SaltedHash frontend to Vercel.
-
-## 1. Project Root Directory
-You MUST set the Vercel Root Directory to `frontend`.
-- Navigate to your Vercel Dashboard -> Select Project -> **Settings** -> **General** -> **Root Directory**.
-- Set it to `frontend` and save.
-
-## 2. Build & Development Settings
-The framework preset should be identified as **Vite** or **Vue**.js.
-- **Build Command:** `npm run build`
-- **Output Directory:** `dist`
-- **Install Command:** `npm install`
-
-## 3. Environment Variables
-Add all required Appwrite environment variables in the Vercel settings (Settings -> Environment Variables).
-- `VITE_APPWRITE_ENDPOINT`
-- `VITE_APPWRITE_PROJECT_ID`
-- `VITE_APPWRITE_DATABASE_ID`
-- `VITE_APPWRITE_POSTS_COLLECTION_ID`
-- `VITE_APPWRITE_COMMENTS_COLLECTION_ID`
-- `VITE_APPWRITE_BUSINESSES_COLLECTION_ID`
-- `VITE_APPWRITE_CIRCLES_COLLECTION_ID`
-- `VITE_APPWRITE_CHANNELS_COLLECTION_ID`
-- `VITE_APPWRITE_MESSAGES_COLLECTION_ID`
-- `VITE_APPWRITE_BUCKET_ID`
-
-## 4. Routing and SPA behavior
-The repository contains `frontend/vercel.json` with the following contents:
-=======
 # Vercel Deployment — SALTEDHASH
 
 ## Project Settings
@@ -52,7 +20,7 @@ Set these in **Vercel → Project → Settings → Environment Variables** for P
 
 | Variable | Description |
 |----------|-------------|
-| `VITE_APPWRITE_ENDPOINT` | Appwrite API endpoint (e.g. `https://fra.cloud.appwrite.io/v1`) |
+| `VITE_APPWRITE_ENDPOINT` | Appwrite API endpoint (e.g. `https://cloud.appwrite.io/v1`) |
 | `VITE_APPWRITE_PROJECT_ID` | Appwrite project ID |
 | `VITE_APPWRITE_DATABASE_ID` | Database ID containing all collections |
 | `VITE_APPWRITE_POSTS_COLLECTION_ID` | Posts collection ID |
@@ -77,7 +45,6 @@ All variables must be prefixed with `VITE_` so Vite embeds them at build time.
 
 `frontend/vercel.json`:
 
->>>>>>> Stashed changes
 ```json
 {
   "rewrites": [
@@ -85,9 +52,6 @@ All variables must be prefixed with `VITE_` so Vite embeds them at build time.
   ]
 }
 ```
-<<<<<<< Updated upstream
-This is required to handle client-side routing on Vercel. Because the Root Directory is set to `frontend`, this file will be correctly picked up by Vercel.
-=======
 
 This ensures `/businesses`, `/circles`, `/profile`, etc. resolve correctly on hard refresh.
 
@@ -117,4 +81,3 @@ Dev server: `http://localhost:5173`
 | 401 on all requests | Check `VITE_APPWRITE_PROJECT_ID` and auth session |
 | Missing collections | Run setup per APPWRITE_SETUP.md |
 | Images not loading | Verify bucket permissions and `VITE_APPWRITE_BUCKET_ID` |
->>>>>>> Stashed changes
