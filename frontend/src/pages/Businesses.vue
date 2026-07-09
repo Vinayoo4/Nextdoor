@@ -5,6 +5,7 @@
       <p class="text-indigo-100 mt-1">Discover new local favorites</p>
     </div>
 
+<<<<<<< Updated upstream
     <!-- Search / Filter -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
       <div class="flex-1 relative">
@@ -13,6 +14,18 @@
         </svg>
         <input v-model="searchQuery" type="text" placeholder="Search businesses..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 text-sm border-gray-300">
       </div>
+=======
+    <div v-if="!loading && !error" class="relative">
+      <input
+        v-model="searchQuery"
+        type="search"
+        placeholder="Search by name or category..."
+        class="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-3 border pl-10"
+      />
+      <svg class="absolute left-3 top-3.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+>>>>>>> Stashed changes
     </div>
 
     <div v-if="loading" class="flex justify-center p-10">
@@ -36,10 +49,14 @@
           <p class="text-gray-600 text-sm mt-2">{{ biz.shortDescription }}</p>
           <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
             <span class="text-xs text-gray-500">Local Business</span>
+<<<<<<< Updated upstream
             <router-link :to="`/businesses/${biz.$id}`" class="text-indigo-600 text-sm font-medium hover:text-indigo-800 flex items-center">
               View Details
               <svg class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
             </router-link>
+=======
+            <button @click="viewDetails(biz.$id)" class="text-indigo-600 text-sm font-medium hover:text-indigo-800">View Details &rarr;</button>
+>>>>>>> Stashed changes
           </div>
         </div>
       </div>
@@ -48,31 +65,60 @@
         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
         </svg>
+<<<<<<< Updated upstream
         <h3 class="mt-2 text-sm font-medium text-gray-900">No businesses found</h3>
         <p class="mt-1 text-sm text-gray-500" v-if="searchQuery">Try adjusting your search terms.</p>
         <p class="mt-1 text-sm text-gray-500" v-else>Check back later for new local spots.</p>
+=======
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No businesses listed yet</h3>
+        <p class="mt-1 text-sm text-gray-500">{{ searchQuery ? 'No matches for your search.' : 'Check back later for new local spots.' }}</p>
+>>>>>>> Stashed changes
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+<<<<<<< Updated upstream
 import { ref, onMounted, computed } from 'vue'
 import { databases, APPWRITE_CONFIG } from '../services/appwrite'
 import type { BusinessModel } from '../services/models'
 
 const businesses = ref<BusinessModel[]>([])
+=======
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { databases, APPWRITE_CONFIG, Query } from '../services/appwrite'
+import type { Business } from '../types/appwrite'
+
+const router = useRouter()
+const businesses = ref<Business[]>([])
+const searchQuery = ref('')
+>>>>>>> Stashed changes
 const loading = ref(true)
 const error = ref(false)
 const searchQuery = ref('')
+
+const filteredBusinesses = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return businesses.value
+  return businesses.value.filter(
+    (b) => b.name.toLowerCase().includes(q) || b.category.toLowerCase().includes(q)
+  )
+})
 
 const fetchBusinesses = async () => {
   loading.value = true
   error.value = false
   try {
+<<<<<<< Updated upstream
     const response = await databases.listDocuments<BusinessModel>(
+=======
+    const response = await databases.listDocuments<Business>(
+>>>>>>> Stashed changes
       APPWRITE_CONFIG.databaseId,
-      APPWRITE_CONFIG.collections.businesses
+      APPWRITE_CONFIG.collections.businesses,
+      [Query.orderDesc('$createdAt')]
     )
     businesses.value = response.documents
   } catch (err) {
@@ -83,6 +129,7 @@ const fetchBusinesses = async () => {
   }
 }
 
+<<<<<<< Updated upstream
 const filteredBusinesses = computed(() => {
   if (!searchQuery.value) return businesses.value;
   const q = searchQuery.value.toLowerCase()
@@ -91,6 +138,11 @@ const filteredBusinesses = computed(() => {
     b.category.toLowerCase().includes(q)
   )
 })
+=======
+const viewDetails = (id: string) => {
+  router.push(`/businesses/${id}`)
+}
+>>>>>>> Stashed changes
 
 onMounted(() => {
   fetchBusinesses()

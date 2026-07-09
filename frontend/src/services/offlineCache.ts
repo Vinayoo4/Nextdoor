@@ -1,6 +1,8 @@
-import { openDB } from 'idb';
-import type { DBSchema } from 'idb';
+import { openDB } from 'idb'
+import type { DBSchema } from 'idb'
+import type { PostDraft, CachedPost } from '../types/appwrite'
 
+<<<<<<< Updated upstream
 export interface PostDraft {
     $id: string;
     content: string;
@@ -22,18 +24,22 @@ export interface CachedPost {
     $updatedAt?: string;
     $permissions?: string[];
 }
+=======
+const MAX_CACHED_POSTS = 100
+>>>>>>> Stashed changes
 
 interface LocalDB extends DBSchema {
-    drafts: {
-        key: string;
-        value: PostDraft;
-    };
-    cachedPosts: {
-        key: string;
-        value: CachedPost;
-    };
+  drafts: {
+    key: string
+    value: PostDraft
+  }
+  cachedPosts: {
+    key: string
+    value: CachedPost
+  }
 }
 
+<<<<<<< Updated upstream
 const dbPromise = openDB<LocalDB>('saltedhash-local', 2, {
     upgrade(db, oldVersion, _newVersion) {
         if (oldVersion < 1) {
@@ -45,23 +51,39 @@ const dbPromise = openDB<LocalDB>('saltedhash-local', 2, {
         }
     },
 });
+=======
+const dbPromise = openDB<LocalDB>('saltedhash-local', 1, {
+  upgrade(db) {
+    db.createObjectStore('drafts', { keyPath: '$id' })
+    db.createObjectStore('cachedPosts', { keyPath: '$id' })
+  },
+})
+>>>>>>> Stashed changes
 
 export const offlineCache = {
-    async saveDraft(draft: PostDraft) {
-        const db = await dbPromise;
-        await db.put('drafts', draft);
-    },
+  async saveDraft(draft: PostDraft) {
+    const db = await dbPromise
+    await db.put('drafts', draft)
+  },
 
-    async getDrafts(): Promise<PostDraft[]> {
-        const db = await dbPromise;
-        return db.getAll('drafts');
-    },
+  async updateDraftStatus(id: string, syncStatus: PostDraft['syncStatus']) {
+    const db = await dbPromise
+    const draft = await db.get('drafts', id)
+    if (draft) {
+      await db.put('drafts', { ...draft, syncStatus })
+    }
+  },
 
-    async removeDraft(id: string) {
-        const db = await dbPromise;
-        await db.delete('drafts', id);
-    },
+  async getDrafts(): Promise<PostDraft[]> {
+    const db = await dbPromise
+    const drafts = await db.getAll('drafts')
+    return drafts.map((d) => ({
+      ...d,
+      syncStatus: d.syncStatus ?? 'pending',
+    }))
+  },
 
+<<<<<<< Updated upstream
     async cachePosts(posts: CachedPost[]) {
         const db = await dbPromise;
         const tx = db.transaction('cachedPosts', 'readwrite');
@@ -82,9 +104,40 @@ export const offlineCache = {
 
         await tx.done;
     },
+=======
+  async removeDraft(id: string) {
+    const db = await dbPromise
+    await db.delete('drafts', id)
+  },
+>>>>>>> Stashed changes
 
-    async getCachedPosts(): Promise<CachedPost[]> {
-        const db = await dbPromise;
-        return db.getAll('cachedPosts');
-    },
-};
+  async cachePosts(posts: CachedPost[]) {
+    const db = await dbPromise
+    const existing = await db.getAll('cachedPosts')
+    const merged = new Map<string, CachedPost>()
+
+    for (const post of existing) {
+      merged.set(post.$id, post)
+    }
+    for (const post of posts) {
+      merged.set(post.$id, post)
+    }
+
+    const sorted = [...merged.values()].sort(
+      (a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
+    )
+    const capped = sorted.slice(0, MAX_CACHED_POSTS)
+
+    const tx = db.transaction('cachedPosts', 'readwrite')
+    await tx.store.clear()
+    await Promise.all([...capped.map((post) => tx.store.put(post)), tx.done])
+  },
+
+  async getCachedPosts(): Promise<CachedPost[]> {
+    const db = await dbPromise
+    const posts = await db.getAll('cachedPosts')
+    return posts.sort(
+      (a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
+    )
+  },
+}

@@ -7,9 +7,13 @@
       <h2 class="text-2xl font-bold text-gray-900 mb-2">You're Offline</h2>
       <p class="text-gray-500 mb-6">It looks like you've lost your connection. We've cached some content for you, or you can try reconnecting.</p>
 
+<<<<<<< Updated upstream
       <div v-if="checkError" class="mb-4 bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-100">
         Still offline. Please check your connection.
       </div>
+=======
+      <p v-if="offlineNotice" class="text-sm text-amber-600 mb-4">{{ offlineNotice }}</p>
+>>>>>>> Stashed changes
 
       <div class="space-y-3">
         <button @click="retry" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
@@ -24,21 +28,56 @@
 </template>
 
 <script setup lang="ts">
+<<<<<<< Updated upstream
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const checkError = ref(false)
+=======
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const offlineNotice = ref('')
+
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
+
+const showOfflineNotice = () => {
+  offlineNotice.value = 'Still offline. Please check your connection.'
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    offlineNotice.value = ''
+  }, 3000)
+}
+>>>>>>> Stashed changes
 
 const retry = () => {
   if (navigator.onLine) {
     checkError.value = false
     router.go(-1)
   } else {
+<<<<<<< Updated upstream
     checkError.value = true
     setTimeout(() => {
       checkError.value = false
     }, 3000)
+=======
+    showOfflineNotice()
+>>>>>>> Stashed changes
   }
 }
+
+const handleOnline = () => {
+  router.push('/')
+}
+
+onMounted(() => {
+  window.addEventListener('online', handleOnline)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('online', handleOnline)
+  if (noticeTimer) clearTimeout(noticeTimer)
+})
 </script>

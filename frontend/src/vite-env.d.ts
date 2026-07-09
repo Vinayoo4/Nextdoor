@@ -1,2 +1,19 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_APPWRITE_ENDPOINT: string
+  readonly VITE_APPWRITE_PROJECT_ID: string
+  readonly VITE_APPWRITE_DATABASE_ID: string
+  readonly VITE_APPWRITE_POSTS_COLLECTION_ID: string
+  readonly VITE_APPWRITE_COMMENTS_COLLECTION_ID: string
+  readonly VITE_APPWRITE_BUSINESSES_COLLECTION_ID: string
+  readonly VITE_APPWRITE_CIRCLES_COLLECTION_ID: string
+  readonly VITE_APPWRITE_CHANNELS_COLLECTION_ID: string
+  readonly VITE_APPWRITE_MESSAGES_COLLECTION_ID: string
+  readonly VITE_APPWRITE_BUCKET_ID: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}

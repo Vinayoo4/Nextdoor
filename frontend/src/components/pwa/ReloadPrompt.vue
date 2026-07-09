@@ -26,12 +26,12 @@
 import { useRegisterSW } from 'virtual:pwa-register/vue'
 
 const { needRefresh, updateServiceWorker } = useRegisterSW({
-  onRegistered(r: any) {
+  onRegistered(r: ServiceWorkerRegistration | undefined) {
     console.log('SW Registered: ', r)
   },
-  onRegisterError(error: any) {
+  onRegisterError(error: Error) {
     console.log('SW registration error', error)
-  }
+  },
 })
 
 const close = () => {

@@ -1,6 +1,11 @@
 <template>
-  <div class="min-h-screen bg-gray-100 flex justify-center">
+  <div v-if="!authStore.isInitialized" class="min-h-screen bg-gray-100 flex items-center justify-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+  </div>
+
+  <div v-else class="min-h-screen bg-gray-100 flex justify-center">
     <div class="w-full max-w-2xl bg-white shadow-lg min-h-screen flex flex-col relative">
+<<<<<<< Updated upstream
 
       <!-- Initialization Loading Screen -->
       <div v-if="!authStore.isInitialized" class="flex-grow flex items-center justify-center">
@@ -44,6 +49,64 @@
           </router-link>
         </nav>
       </template>
+=======
+      <header class="bg-indigo-600 text-white shadow-md z-10 p-4 flex justify-between items-center sticky top-0">
+        <h1 class="text-xl font-extrabold tracking-tight">SALTEDHASH</h1>
+        <div v-if="authStore.isAuthenticated" class="text-sm font-medium">
+          {{ authStore.user?.name }}
+        </div>
+      </header>
+
+      <main class="flex-grow p-4 overflow-y-auto pb-24">
+        <RouterView v-slot="{ Component }">
+          <Transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </Transition>
+        </RouterView>
+      </main>
+
+      <nav
+        v-if="authStore.isAuthenticated"
+        class="fixed bottom-0 w-full max-w-2xl bg-white border-t border-gray-200 flex justify-around px-3 pt-3 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]"
+        style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))"
+      >
+        <router-link
+          to="/"
+          class="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition-colors"
+          :class="{ 'text-indigo-600': $route.path === '/' }"
+        >
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+          <span class="text-xs font-medium">Feed</span>
+        </router-link>
+
+        <router-link
+          to="/businesses"
+          class="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition-colors"
+          :class="{ 'text-indigo-600': $route.path.startsWith('/businesses') }"
+        >
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-xs font-medium">Local</span>
+        </router-link>
+
+        <router-link
+          to="/circles"
+          class="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition-colors"
+          :class="{ 'text-indigo-600': $route.path === '/circles' }"
+        >
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-xs font-medium">Circles</span>
+        </router-link>
+
+        <router-link
+          to="/profile"
+          class="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition-colors"
+          :class="{ 'text-indigo-600': $route.path === '/profile' }"
+        >
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          <span class="text-xs font-medium">Profile</span>
+        </router-link>
+      </nav>
+>>>>>>> Stashed changes
 
       <ReloadPrompt />
     </div>
@@ -56,3 +119,14 @@ import ReloadPrompt from './components/pwa/ReloadPrompt.vue'
 
 const authStore = useAuthStore()
 </script>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
