@@ -2,9 +2,10 @@ import { Client, Account, Databases, Storage, ID, Query } from 'appwrite'
 
 const client = new Client()
 
-client
-  .setEndpoint('https://fra.cloud.appwrite.io/v1')
-  .setProject('69c3aeb5001e29bce67a')
+const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1'
+const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID || '69c3aeb5001e29bce67a'
+
+client.setEndpoint(endpoint).setProject(projectId)
 
 export { client }
 export const account = new Account(client)
@@ -13,24 +14,9 @@ export const storage = new Storage(client)
 
 export { ID, Query }
 
-const requiredEnvVars = [
-  'VITE_APPWRITE_DATABASE_ID',
-  'VITE_APPWRITE_POSTS_COLLECTION_ID',
-  'VITE_APPWRITE_COMMENTS_COLLECTION_ID',
-  'VITE_APPWRITE_BUSINESSES_COLLECTION_ID',
-  'VITE_APPWRITE_CIRCLES_COLLECTION_ID',
-  'VITE_APPWRITE_CHANNELS_COLLECTION_ID',
-  'VITE_APPWRITE_MESSAGES_COLLECTION_ID',
-  'VITE_APPWRITE_BUCKET_ID',
-]
-
-requiredEnvVars.forEach((key) => {
-  if (!import.meta.env[key]) {
-    console.error(`[APPWRITE CONFIG] Missing required environment variable: ${key}`)
-  }
-})
-
 export const APPWRITE_CONFIG = {
+  endpoint,
+  projectId,
   databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID as string,
   collections: {
     posts: import.meta.env.VITE_APPWRITE_POSTS_COLLECTION_ID as string,
@@ -44,7 +30,5 @@ export const APPWRITE_CONFIG = {
 }
 
 export function getFilePreviewUrl(fileId: string): string {
-  const endpoint = 'https://fra.cloud.appwrite.io/v1'
-  const projectId = '69c3aeb5001e29bce67a'
   return `${endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/preview?project=${projectId}`
 }
