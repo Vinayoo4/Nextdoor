@@ -3,8 +3,8 @@ import { Client, Account, Databases, Storage, ID, Query } from 'appwrite'
 const client = new Client()
 
 client
-  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '69c3aeb5001e29bce67a')
+  .setEndpoint('https://fra.cloud.appwrite.io/v1')
+  .setProject('69c3aeb5001e29bce67a')
 
 export { client }
 export const account = new Account(client)
@@ -44,7 +44,7 @@ export const APPWRITE_CONFIG = {
 }
 
 export function getFilePreviewUrl(fileId: string): string {
-  const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1'
-  const projectId = import.meta.env.VITE_APPWRITE_PROJECT_ID || '69c3aeb5001e29bce67a'
+  const endpoint = 'https://fra.cloud.appwrite.io/v1'
+  const projectId = '69c3aeb5001e29bce67a'
   return `${endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/preview?project=${projectId}`
 }
