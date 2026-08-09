@@ -1,12 +1,21 @@
 {
-  "name": "saltedhash-pwa",
-  "version": "1.0.0",
+  "name": "nextdoor",
+  "version": "2.0.0",
   "private": true,
+  "description": "Nextdoor — hyperlocal neighborhood app (React + Vite frontend, Express + MongoDB backend)",
   "workspaces": [
+    "backend",
     "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev -w frontend",
-    "build": "npm run build -w frontend"
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "seed": "npm run seed -w backend",
+    "start": "npm run start -w backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

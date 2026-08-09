@@ -1,22 +1,21 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 
 export default defineConfig({
   plugins: [
-    vue(),
+    react(),
     VitePWA({
       registerType: 'autoUpdate',
-      devOptions: {
-        enabled: false,
-      },
+      devOptions: { enabled: false },
+      includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'SALTEDHASH',
-        short_name: 'SALTEDHASH',
-        description: 'Your neighborhood — local feed, businesses, and community circles.',
+        name: 'Nextdoor',
+        short_name: 'Nextdoor',
+        description: 'Your neighborhood — local feed, businesses, maps, and community circles.',
         theme_color: '#4f46e5',
-        background_color: '#ffffff',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -40,22 +39,30 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/offline.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          {
+            urlPattern: ({ request }) => {
+              const url = new URL(request.url)
+              return url.pathname.startsWith('/api/') && request.method === 'GET'
+            },
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 3 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],
@@ -65,6 +72,15 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
 })
