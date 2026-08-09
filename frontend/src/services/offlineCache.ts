@@ -1,87 +1,63 @@
-import { openDB } from 'idb'
-import type { DBSchema } from 'idb'
-import type { PostDraft, CachedPost } from '../types/appwrite'
+import { openDB, type IDBPDatabase } from 'idb'
 
-const MAX_CACHED_POSTS = 100
+const DB_NAME = 'nextdoor-cache'
+const STORE = 'kv'
+const MAX_ENTRIES = 200
 
-interface LocalDB extends DBSchema {
-  drafts: {
-    key: string
-    value: PostDraft
+let dbPromise: Promise<IDBPDatabase> | null = null
+
+function getDB() {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, 1, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE)
+        }
+      },
+    })
   }
-  cachedPosts: {
-    key: string
-    value: CachedPost
+  return dbPromise
+}
+
+export async function cacheGet<T>(key: string): Promise<T | undefined> {
+  try {
+    const db = await getDB()
+    return (await db.get(STORE, key)) as T | undefined
+  } catch {
+    return undefined
   }
 }
 
-const dbPromise = openDB<LocalDB>('saltedhash-local', 2, {
-  upgrade(db, oldVersion) {
-    if (oldVersion < 1) {
-      db.createObjectStore('drafts', { keyPath: '$id' })
-      db.createObjectStore('cachedPosts', { keyPath: '$id' })
+export async function cacheSet(key: string, value: unknown): Promise<void> {
+  try {
+    const db = await getDB()
+    await db.put(STORE, value, key)
+    const count = await db.count(STORE)
+    if (count > MAX_ENTRIES) {
+      const tx = db.transaction(STORE, 'readwrite')
+      let cursor = await tx.store.openCursor()
+      let removed = 0
+      while (cursor && removed < count - MAX_ENTRIES) {
+        await cursor.delete()
+        removed++
+        cursor = await cursor.continue()
+      }
     }
-    if (oldVersion < 2) {
-      // syncStatus migration is handled by getDrafts default
-    }
-  },
-})
+  } catch {
+    // cache failures are non-fatal
+  }
+}
 
-export const offlineCache = {
-  async saveDraft(draft: PostDraft) {
-    const db = await dbPromise
-    await db.put('drafts', draft)
-  },
+export function cacheKey(method: string, url: string, body?: unknown): string {
+  return `${method}:${url}:${body ? JSON.stringify(body) : ''}`
+}
 
-  async updateDraftStatus(id: string, syncStatus: PostDraft['syncStatus']) {
-    const db = await dbPromise
-    const draft = await db.get('drafts', id)
-    if (draft) {
-      await db.put('drafts', { ...draft, syncStatus })
-    }
-  },
-
-  async getDrafts(): Promise<PostDraft[]> {
-    const db = await dbPromise
-    const drafts = await db.getAll('drafts')
-    return drafts.map((d) => ({
-      ...d,
-      syncStatus: d.syncStatus ?? 'pending',
-    }))
-  },
-
-  async removeDraft(id: string) {
-    const db = await dbPromise
-    await db.delete('drafts', id)
-  },
-
-  async cachePosts(posts: CachedPost[]) {
-    const db = await dbPromise
-    const existing = await db.getAll('cachedPosts')
-    const merged = new Map<string, CachedPost>()
-
-    for (const post of existing) {
-      merged.set(post.$id, post)
-    }
-    for (const post of posts) {
-      merged.set(post.$id, post)
-    }
-
-    const sorted = [...merged.values()].sort(
-      (a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
-    )
-    const capped = sorted.slice(0, MAX_CACHED_POSTS)
-
-    const tx = db.transaction('cachedPosts', 'readwrite')
-    await tx.store.clear()
-    await Promise.all([...capped.map((post) => tx.store.put(post)), tx.done])
-  },
-
-  async getCachedPosts(): Promise<CachedPost[]> {
-    const db = await dbPromise
-    const posts = await db.getAll('cachedPosts')
-    return posts.sort(
-      (a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
-    )
-  },
+export async function isOnline(): Promise<boolean> {
+  if (navigator.onLine !== undefined) return navigator.onLine
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' })
+    return res.ok
+  } catch {
+    return false
+  }
 }

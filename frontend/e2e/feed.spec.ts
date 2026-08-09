@@ -1,24 +1,29 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
-test.describe('Feed and Post Flow', () => {
+test.describe('Feed Flow', () => {
+  test('loads feed and shows seeded posts', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('#phone', '9999999999')
+    await page.fill('#password', 'Admin@1234')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/home/)
 
-  test('loads feed and handles offline states conditionally', async ({ page, context }) => {
-    await page.goto('/');
+    await page.goto('/feed')
+    await expect(page.locator('h1')).toContainText('Community Feed')
+    await expect(page.locator('article').first()).toBeVisible({ timeout: 10000 })
+  })
 
-    await page.waitForLoadState('networkidle');
-    const url = page.url();
-    if (url.includes('login')) {
-      await expect(page.locator('h2')).toContainText('Welcome');
-      return;
-    }
+  test('can post to the feed', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('#phone', '9999999999')
+    await page.fill('#password', 'Admin@1234')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/home/)
 
-    const textarea = page.locator('textarea[placeholder="What\'s happening locally?"]');
-    await expect(textarea).toBeVisible();
-
-    await context.setOffline(true);
-    await page.reload();
-
-    await expect(page.locator('text=You\'re Offline').or(page.locator('.text-red-600'))).toBeVisible();
-    await context.setOffline(false);
-  });
-});
+    await page.goto('/feed')
+    const message = `E2E post ${Date.now()}`
+    await page.fill('textarea', message)
+    await page.click('button:has-text("Post")')
+    await expect(page.locator('article', { hasText: message })).toBeVisible({ timeout: 10000 })
+  })
+})

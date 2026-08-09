@@ -1,24 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
 test.describe('Businesses Flow', () => {
+  test('loads businesses list and shows seeded data', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('#phone', '9999999999')
+    await page.fill('#password', 'Admin@1234')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/home/, { timeout: 10000 })
 
-  test('loads businesses page', async ({ page }) => {
-    await page.goto('/businesses');
+    await page.goto('/businesses')
+    await expect(page.locator('h1')).toContainText('Businesses')
+    await expect(page.locator('a[href^="/businesses/"]').first()).toBeVisible({ timeout: 10000 })
+  })
 
-    await page.waitForLoadState('networkidle');
-    const url = page.url();
+  test('can create a business', async ({ page }) => {
+    await page.goto('/login')
+    await page.fill('#phone', '9999999999')
+    await page.fill('#password', 'Admin@1234')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/home/, { timeout: 10000 })
 
-    if (url.includes('login')) {
-      await expect(page.locator('h2')).toContainText('Welcome');
-    } else {
-      await expect(page.locator('h2')).toContainText('Nearby Businesses');
+    await page.goto('/businesses/new')
+    await page.fill('input[placeholder*="Sharma Sweets"]', `E2E Test Cafe ${Date.now()}`)
+    await page.fill('input[placeholder*="Street, area"]', 'C-Scheme, Jaipur')
+    await page.fill('input[placeholder*="+91 98"]', '+91 90000 00002')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL(/\/businesses\//)
+    await expect(page.locator('h1').first()).toContainText('E2E Test Cafe')
+  })
+})
 
-      await expect(page.locator('.animate-spin')).toBeHidden();
-
-      const noBusinesses = page.locator('text=No businesses listed yet');
-      const businessCards = page.locator('.bg-white.rounded-xl.shadow');
-
-      await expect(noBusinesses.or(businessCards.first())).toBeVisible();
-    }
-  });
-});
