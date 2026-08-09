@@ -9,7 +9,8 @@ declare global {
     interface Request {
       user?: {
         id: string
-        phone: string
+        email: string
+        phone?: string
         role: 'user' | 'owner' | 'admin'
       }
     }
@@ -31,11 +32,11 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   }
 
   void User.findById(payload.userId)
-    .select('_id phone role')
+    .select('_id email role')
     .lean()
     .then((user) => {
       if (!user) return next(new ApiError(401, 'User no longer exists'))
-      req.user = { id: String(user._id), phone: user.phone, role: user.role }
+      req.user = { id: String(user._id), email: (user as any).email, role: user.role }
       next()
     })
     .catch(() => next(new ApiError(500, 'Authentication error')))

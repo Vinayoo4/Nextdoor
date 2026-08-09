@@ -1,49 +1,71 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
 import { User } from '../models/User'
+import { Otp } from '../models/Otp'
 import { hashPassword, verifyPassword } from '../utils/hash'
 import { signToken } from '../utils/jwt'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { serializeUser } from '../utils/serializers'
+import crypto from 'node:crypto'
 
-const registerSchema = z.object({
-  phone: z
-    .string()
-    .min(10, 'Phone number must be at least 10 digits')
-    .max(15, 'Phone number is too long')
-    .regex(/^[0-9+\- ]+$/, 'Phone number can only contain digits'),
-  name: z.string().min(1, 'Name is required').max(60),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  password: z.string().min(8, 'Password must be at least 8 characters').max(72),
+const requestOtpSchema = z.object({
+  email: z.string().email('Invalid email'),
 })
 
-const loginSchema = z.object({
-  phone: z.string().min(1, 'Phone is required'),
-  password: z.string().min(1, 'Password is required'),
+const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email'),
+  otp: z.string().length(6, 'OTP must be 6 digits'),
+  name: z.string().optional(),
 })
 
-export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { phone, name, email, password } = parseBody(req, registerSchema)
-  const existing = await User.findOne({ phone })
-  if (existing) throw new ApiError(409, 'An account with this phone already exists')
+export const requestOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = parseBody(req, requestOtpSchema)
 
-  const passwordHash = await hashPassword(password)
-  const user = await User.create({ phone, name, email: email || undefined, passwordHash })
+  // Generate 6 digit OTP
+  const devOtp = Math.floor(100000 + Math.random() * 900000).toString()
+  const codeHash = await hashPassword(devOtp)
 
-  const token = signToken({ userId: String(user._id), phone: user.phone, role: user.role })
-  res.status(201).json({ token, user: serializeUser(user.toObject()) })
+  // Expire in 10 minutes
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+
+  await Otp.findOneAndUpdate(
+    { email },
+    { email, codeHash, expiresAt, attempts: 0 },
+    { upsert: true, new: true }
+  )
+
+  // In a real app we'd send an email here. For MVP, we return it in dev mode.
+  res.json({ message: 'OTP sent successfully', devOtp })
 })
 
-export const login = asyncHandler(async (req: Request, res: Response) => {
-  const { phone, password } = parseBody(req, loginSchema)
-  const user = await User.findOne({ phone })
-  if (!user) throw new ApiError(401, 'Invalid phone or password')
+export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { email, otp, name } = parseBody(req, verifyOtpSchema)
 
-  const ok = await verifyPassword(password, user.passwordHash)
-  if (!ok) throw new ApiError(401, 'Invalid phone or password')
+  const otpRecord = await Otp.findOne({ email })
+  if (!otpRecord) throw new ApiError(400, 'No OTP requested for this email')
 
-  const token = signToken({ userId: String(user._id), phone: user.phone, role: user.role })
+  if (otpRecord.expiresAt < new Date()) {
+    await Otp.deleteOne({ email })
+    throw new ApiError(400, 'OTP expired')
+  }
+
+  const ok = await verifyPassword(otp, otpRecord.codeHash)
+  if (!ok) {
+    otpRecord.attempts += 1
+    await otpRecord.save()
+    throw new ApiError(400, 'Invalid OTP')
+  }
+
+  // OTP is valid
+  await Otp.deleteOne({ email })
+
+  let user = await User.findOne({ email })
+  if (!user) {
+    user = await User.create({ email, name: name || email.split('@')[0] })
+  }
+
+  const token = signToken({ userId: String(user._id), email: user.email, role: user.role })
   res.json({ token, user: serializeUser(user.toObject()) })
 })
 

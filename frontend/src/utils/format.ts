@@ -31,7 +31,7 @@ export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; l
   return 2 * R * Math.asin(Math.sqrt(s))
 }
 
-export const JAIPUR_CENTER = { lat: 26.9124, lng: 75.7873 }
+export const REWARI_CENTER = { lat: 28.1928, lng: 76.6186 }
 
 export function todayHours(hours: Record<string, { open: string; close: string }> | undefined): { open: string; close: string } | null {
   if (!hours) return null

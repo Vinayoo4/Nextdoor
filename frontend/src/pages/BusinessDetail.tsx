@@ -158,14 +158,12 @@ export default function BusinessDetail() {
           📞 Call
         </a>
         {business.location && (
-          <a
+          <Link
             className="btn-outline w-full"
-            href={`https://www.google.com/maps/search/?api=1&query=${business.location.lat},${business.location.lng}`}
-            target="_blank"
-            rel="noreferrer"
+            to={`/navigate?lat=${business.location.lat}&lng=${business.location.lng}&name=${encodeURIComponent(business.name)}`}
           >
             🧭 Directions
-          </a>
+          </Link>
         )}
       </div>
 

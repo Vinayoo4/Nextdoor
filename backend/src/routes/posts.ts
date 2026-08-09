@@ -5,10 +5,10 @@ import { requireAuth } from '../middleware/auth'
 const router = Router()
 
 router.get('/', postController.listPosts)
-router.post('/', requireAuth, postController.createPost)
+router.post('/', postController.createPost)
 router.get('/:id', postController.getPost)
 router.delete('/:id', requireAuth, postController.deletePost)
 router.get('/:id/comments', postController.listComments)
-router.post('/:id/comments', requireAuth, postController.addComment)
+router.post('/:id/comments', postController.addComment)
 
 export default router

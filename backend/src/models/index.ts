@@ -12,3 +12,4 @@ export * from './Offer'
 export * from './AnalyticsEvent'
 export * from './Waitlist'
 
+export * from './Otp'

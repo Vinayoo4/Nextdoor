@@ -137,7 +137,6 @@ export function serializeEmergency(e: WithId<IEmergency>) {
 export function serializeUser(u: WithId<IUser>) {
   return {
     id: str(u._id),
-    phone: u.phone,
     name: u.name,
     email: u.email ?? null,
     role: u.role,

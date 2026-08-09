@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { EmergencyContact } from '@/types'
 import { emergencyApi } from '@/services/api'
 import { Spinner, ErrorBox } from '@/components/UI'
-import { JAIPUR_CENTER } from '@/utils/format'
+import { REWARI_CENTER } from '@/utils/format'
 
 const TYPE_META: Record<string, { label: string; emoji: string; color: string }> = {
   police: { label: 'Police', emoji: '👮', color: 'border-blue-200 bg-blue-50 text-blue-700' },
@@ -34,11 +34,11 @@ export default function Emergency() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => load(pos.coords.latitude, pos.coords.longitude),
-        () => load(JAIPUR_CENTER.lat, JAIPUR_CENTER.lng),
+        () => load(REWARI_CENTER.lat, REWARI_CENTER.lng),
         { timeout: 5000 }
       )
     } else {
-      load(JAIPUR_CENTER.lat, JAIPUR_CENTER.lng)
+      load(REWARI_CENTER.lat, REWARI_CENTER.lng)
     }
   }, [])
 

@@ -5,7 +5,7 @@ import { businessesApi } from '@/services/api'
 import MapView from '@/components/MapView'
 import { Spinner, ErrorBox } from '@/components/UI'
 import { CATEGORIES, categoryMeta } from '@/utils/categories'
-import { JAIPUR_CENTER } from '@/utils/format'
+import { REWARI_CENTER } from '@/utils/format'
 
 export default function Explore() {
   const [category, setCategory] = useState<BusinessCategory | 'All'>('All')
@@ -72,7 +72,7 @@ export default function Explore() {
               location: b.location!,
               popup: `<div class="px-2 py-1"><strong>${b.name}</strong><br/><a href="/businesses/${b.slug}" class="text-indigo-600 font-semibold text-xs">View →</a></div>`,
             }))}
-            center={JAIPUR_CENTER}
+            center={REWARI_CENTER}
             zoom={12}
             className="h-[45vh] w-full rounded-2xl"
           />

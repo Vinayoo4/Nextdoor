@@ -5,7 +5,7 @@ import { businessesApi } from '@/services/api'
 import MapView from '@/components/MapView'
 import BusinessCard from '@/components/BusinessCard'
 import { Spinner, ErrorBox, EmptyState } from '@/components/UI'
-import { JAIPUR_CENTER } from '@/utils/format'
+import { REWARI_CENTER } from '@/utils/format'
 import { categoryMeta } from '@/utils/categories'
 
 export default function Home() {
@@ -18,17 +18,17 @@ export default function Home() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => setPosition(JAIPUR_CENTER),
+        () => setPosition(REWARI_CENTER),
         { timeout: 5000 }
       )
     } else {
-      setPosition(JAIPUR_CENTER)
+      setPosition(REWARI_CENTER)
     }
   }, [])
 
   useEffect(() => {
-    const lat = position?.lat ?? JAIPUR_CENTER.lat
-    const lng = position?.lng ?? JAIPUR_CENTER.lng
+    const lat = position?.lat ?? REWARI_CENTER.lat
+    const lng = position?.lng ?? REWARI_CENTER.lng
     businessesApi
       .list({ lat: String(lat), lng: String(lng), limit: '20', sort: 'nearby' })
       .then((res) => {
@@ -57,7 +57,7 @@ export default function Home() {
               location: b.location!,
               popup: `<div class="px-2 py-1"><strong>${b.name}</strong><br/><span>${categoryMeta(b.category).label}</span><br/><a href="/businesses/${b.slug}" class="text-indigo-600 font-semibold text-xs">View details →</a></div>`,
             }))}
-          center={position ?? JAIPUR_CENTER}
+          center={position ?? REWARI_CENTER}
         />
       </div>
 
