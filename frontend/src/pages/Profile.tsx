@@ -21,7 +21,7 @@ export default function Profile() {
         </span>
         <div>
           <h2 className="text-lg">{user?.name}</h2>
-          <p className="text-sm text-slate-500">+91 {user?.phone}</p>
+          <p className="text-sm text-slate-500">{user?.email}</p>
           <span className="chip mt-1 bg-indigo-50 text-primary capitalize">{user?.role}</span>
         </div>
       </div>

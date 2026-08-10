@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Business, LatLng } from '@/types'
 import { categoryMeta } from '@/utils/categories'
-import { JAIPUR_CENTER } from '@/utils/format'
+import { REWARI_CENTER } from '@/utils/format'
 
 interface MapPoint {
   id: string
@@ -40,11 +40,13 @@ function iconFor(category: string) {
 
 export default function MapView({
   points,
-  center = JAIPUR_CENTER,
+  routeGeoJSON,
+  center = REWARI_CENTER,
   zoom = 13,
   className = 'h-72 w-full rounded-2xl',
 }: {
   points: MapPoint[]
+  routeGeoJSON?: any
   center?: LatLng
   zoom?: number
   className?: string
@@ -52,6 +54,7 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Record<string, L.Marker>>({})
+  const routeLayerRef = useRef<L.GeoJSON | null>(null)
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -86,7 +89,7 @@ export default function MapView({
         delete markersRef.current[id]
       }
     })
-    if (points.length > 0) {
+    if (points.length > 0 && !routeGeoJSON) {
       const group = L.featureGroup(Object.values(markersRef.current))
       if (points.length === 1) {
         map.setView([points[0].location.lat, points[0].location.lng], Math.max(zoom, 14))
@@ -94,7 +97,29 @@ export default function MapView({
         map.fitBounds(group.getBounds().pad(0.2), { maxZoom: 15 })
       }
     }
-  }, [points, zoom])
+  }, [points, zoom, routeGeoJSON])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (routeLayerRef.current) {
+      map.removeLayer(routeLayerRef.current)
+      routeLayerRef.current = null
+    }
+
+    if (routeGeoJSON) {
+      const layer = L.geoJSON(routeGeoJSON, {
+        style: {
+          color: '#4f46e5',
+          weight: 5,
+          opacity: 0.8,
+        },
+      }).addTo(map)
+      routeLayerRef.current = layer
+      map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 16 })
+    }
+  }, [routeGeoJSON])
 
   return <div ref={containerRef} className={className} />
 }

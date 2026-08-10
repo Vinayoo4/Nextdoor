@@ -9,10 +9,12 @@ import emergencyRoutes from './emergency'
 import analyticsRoutes from './analytics'
 import waitlistRoutes from './waitlist'
 import userRoutes from './users'
+import navigationRoutes from './navigation'
 
 const router = Router()
 
 router.use('/auth', authRoutes)
+router.use('/', navigationRoutes)
 router.use('/posts', postRoutes)
 router.use('/businesses', businessRoutes)
 router.use('/circles', circleRoutes)

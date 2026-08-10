@@ -53,4 +53,10 @@ async function main() {
   }
 }
 
-main()
+if (env.nodeEnv !== 'production' || process.env.VERCEL !== '1') {
+  main()
+} else {
+  connectDB().catch(console.error)
+}
+
+export default app

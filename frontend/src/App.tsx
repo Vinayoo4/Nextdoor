@@ -19,6 +19,9 @@ import CircleDetail from '@/pages/CircleDetail'
 import Emergency from '@/pages/Emergency'
 import Profile from '@/pages/Profile'
 import Offline from '@/pages/Offline'
+import OwnerDashboard from '@/pages/OwnerDashboard'
+import AuthorityPortal from '@/pages/AuthorityPortal'
+import NavigatePage from '@/pages/Navigate'
 import NotFound from '@/pages/NotFound'
 
 function ScrollToTop() {
@@ -71,6 +74,20 @@ export default function App() {
             </GuestOnly>
           }
         />
+        {/* Public Routes under Layout */}
+        <Route element={<Layout />}>
+          <Route path="/home" element={<Home />} />
+          <Route path="/explore" element={<Explore />} />
+          <Route path="/feed" element={<Feed />} />
+          <Route path="/businesses" element={<Businesses />} />
+          <Route path="/businesses/:slug" element={<BusinessDetail />} />
+          <Route path="/circles" element={<Circles />} />
+          <Route path="/circles/:id" element={<CircleDetail />} />
+          <Route path="/emergency" element={<Emergency />} />
+          <Route path="/navigate" element={<NavigatePage />} />
+        </Route>
+
+        {/* Authenticated Routes under Layout */}
         <Route
           element={
             <RequireAuth>
@@ -78,17 +95,11 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route path="/home" element={<Home />} />
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/feed" element={<Feed />} />
-          <Route path="/businesses" element={<Businesses />} />
           <Route path="/businesses/new" element={<BusinessCreate />} />
-          <Route path="/businesses/:slug" element={<BusinessDetail />} />
-          <Route path="/circles" element={<Circles />} />
           <Route path="/circles/new" element={<CircleCreate />} />
-          <Route path="/circles/:id" element={<CircleDetail />} />
-          <Route path="/emergency" element={<Emergency />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/owner" element={<OwnerDashboard />} />
+          <Route path="/authority" element={<AuthorityPortal />} />
         </Route>
         <Route path="/offline" element={<Offline />} />
         <Route path="*" element={<NotFound />} />

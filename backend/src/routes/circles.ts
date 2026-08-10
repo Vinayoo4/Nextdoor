@@ -5,8 +5,8 @@ import { requireAuth } from '../middleware/auth'
 const router = Router()
 
 router.get('/', circleController.listCircles)
-router.post('/', requireAuth, circleController.createCircle)
+router.post('/', circleController.createCircle)
 router.get('/:id/channels', circleController.listChannels)
-router.post('/:id/channels', requireAuth, circleController.createChannel)
+router.post('/:id/channels', circleController.createChannel)
 
 export default router

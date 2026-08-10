@@ -41,14 +41,14 @@ export const listCircles = asyncHandler(async (_req: Request, res: Response) => 
 })
 
 export const createCircle = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new ApiError(401, 'Not authenticated')
+  const userId = req.user?.id || '000000000000000000000000'
   const { name, description, initialChannel } = parseBody(req, createCircleSchema)
 
   const circle = await Circle.create({
     name,
     description: description ?? '',
-    creatorId: req.user.id,
-    memberIds: [req.user.id],
+    creatorId: userId,
+    memberIds: [userId],
   })
 
   let channel = null
@@ -74,7 +74,6 @@ export const listChannels = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const createChannel = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new ApiError(401, 'Not authenticated')
   const { name } = parseBody(req, createChannelSchema)
   const circle = await Circle.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
@@ -89,19 +88,18 @@ export const listMessages = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const createMessage = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new ApiError(401, 'Not authenticated')
+  const userId = req.user?.id || '000000000000000000000000'
   const { content } = parseBody(req, createMessageSchema)
   const channel = await Channel.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
-  const user = await User.findById(req.user.id).lean()
-  if (!user) throw new ApiError(404, 'User not found')
+  const user = req.user ? await User.findById(userId).lean() : null
 
   const message = await Message.create({
     content,
     channelId: channel._id,
-    userId: req.user.id,
-    authorName: user.name,
+    userId,
+    authorName: user?.name || 'Guest User',
   })
 
   res.status(201).json({ message: serializeMessage(message.toObject()) })

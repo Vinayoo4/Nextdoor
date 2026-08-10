@@ -127,9 +127,8 @@ export interface EmergencyContact {
 
 export interface User {
   id: string
-  phone: string
   name: string
-  email: string | null
+  email: string
   role: 'user' | 'owner' | 'admin'
   points: number
   savedPlaces: string[]

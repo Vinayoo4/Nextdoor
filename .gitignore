@@ -10,3 +10,4 @@ backend/dist/
 frontend/playwright-report/
 frontend/test-results/
 *.tsbuildinfo
+package-lock.json

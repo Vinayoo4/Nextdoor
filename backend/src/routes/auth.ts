@@ -4,8 +4,8 @@ import { requireAuth } from '../middleware/auth'
 
 const router = Router()
 
-router.post('/register', authController.register)
-router.post('/login', authController.login)
+router.post('/otp/request', authController.requestOtp)
+router.post('/otp/verify', authController.verifyOtp)
 router.post('/logout', requireAuth, authController.logout)
 router.get('/me', requireAuth, authController.me)
 

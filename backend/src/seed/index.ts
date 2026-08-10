@@ -52,38 +52,28 @@ async function seed() {
   ])
 
   // Users
-  const adminHash = await hashPassword(env.seedAdminPassword)
-  const ownerHash = await hashPassword('Owner@1234')
-  const userHash = await hashPassword('User@1234')
 
   const admin = await User.create({
-    phone: env.seedAdminPhone,
     name: 'City Admin',
     email: 'admin@nextdoor.local',
-    passwordHash: adminHash,
     role: 'admin',
     points: 100,
   })
   const owner = await User.create({
-    phone: '9888000011',
     name: 'Ramesh Sharma',
     email: 'ramesh@nextdoor.local',
-    passwordHash: ownerHash,
     role: 'owner',
     points: 40,
   })
   const regular = await User.create({
-    phone: '9888000022',
     name: 'Priya Singh',
     email: 'priya@nextdoor.local',
-    passwordHash: userHash,
     role: 'user',
     points: 15,
   })
   const rahul = await User.create({
-    phone: '9888000033',
     name: 'Rahul Verma',
-    passwordHash: userHash,
+    email: 'rahul@nextdoor.local',
     role: 'user',
     points: 8,
   })
@@ -106,7 +96,7 @@ async function seed() {
       location: { type: 'Point', coordinates: [b.lng, b.lat] },
       hours: b.hours,
       attributes: b.attributes,
-      ownerId: Math.random() > 0.7 ? owner._id : undefined,
+      ownerId: b.name === 'SALTEDHASH' ? owner._id : (Math.random() > 0.7 ? owner._id : undefined),
       verified: b.verified,
       plan: b.plan,
       ratingAvg: 0,
@@ -188,10 +178,9 @@ async function seed() {
       content: SEED_POSTS[i],
       userId: author._id,
       authorName: author.name,
-      authorPhone: author.phone,
       location: {
         type: 'Point',
-        coordinates: [75.7873 + (Math.random() - 0.5) * 0.05, 26.9124 + (Math.random() - 0.5) * 0.05],
+        coordinates: [76.6186 + (Math.random() - 0.5) * 0.05, 28.1928 + (Math.random() - 0.5) * 0.05],
       },
     })
     postDocs.push(post)
@@ -235,14 +224,14 @@ async function seed() {
 
   // Emergency contacts
   const emergencySeeds = [
-    { name: 'Ashok Nagar Police Station', type: 'police', phone: '+91 141 237 1100', lat: 26.9045, lng: 75.8078, address: 'Ashok Marg, C-Scheme, Jaipur' },
-    { name: 'Malviya Nagar Police Station', type: 'police', phone: '+91 141 250 0043', lat: 26.8553, lng: 75.8145, address: 'Malviya Nagar, Jaipur' },
-    { name: 'Vaishali Nagar Police Station', type: 'police', phone: '+91 141 235 0032', lat: 26.9101, lng: 75.7611, address: 'Vaishali Nagar, Jaipur' },
-    { name: 'Choti Chaupar Police Station', type: 'police', phone: '+91 141 256 1122', lat: 26.9231, lng: 75.8198, address: 'Choti Chaupar, Jaipur' },
-    { name: 'SMS Hospital Emergency', type: 'ambulance', phone: '108', lat: 26.8997, lng: 75.8152, address: 'SMS Hospital, JLN Marg, Jaipur' },
-    { name: 'Fire Station — Mansarovar', type: 'fire', phone: '101', lat: 26.8541, lng: 75.7718, address: 'Mansarovar, Jaipur' },
-    { name: 'Fire Station — Jawahar Nagar', type: 'fire', phone: '101', lat: 26.9271, lng: 75.7921, address: 'Jawahar Nagar, Jaipur' },
-    { name: 'Women Helpline Cell', type: 'women', phone: '1091', lat: 26.9082, lng: 75.7982, address: 'Collectorate, MI Road, Jaipur' },
+    { name: 'Ashok Nagar Police Station', type: 'police', phone: '+91 141 237 1100', lat: 26.9045, lng: 75.8078, address: 'Ashok Marg, C-Scheme, Rewari' },
+    { name: 'Malviya Nagar Police Station', type: 'police', phone: '+91 141 250 0043', lat: 26.8553, lng: 75.8145, address: 'Malviya Nagar, Rewari' },
+    { name: 'Vaishali Nagar Police Station', type: 'police', phone: '+91 141 235 0032', lat: 26.9101, lng: 75.7611, address: 'Vaishali Nagar, Rewari' },
+    { name: 'Choti Chaupar Police Station', type: 'police', phone: '+91 141 256 1122', lat: 26.9231, lng: 75.8198, address: 'Choti Chaupar, Rewari' },
+    { name: 'SMS Hospital Emergency', type: 'ambulance', phone: '108', lat: 26.8997, lng: 75.8152, address: 'SMS Hospital, JLN Marg, Rewari' },
+    { name: 'Fire Station — Mansarovar', type: 'fire', phone: '101', lat: 26.8541, lng: 75.7718, address: 'Mansarovar, Rewari' },
+    { name: 'Fire Station — Jawahar Nagar', type: 'fire', phone: '101', lat: 26.9271, lng: 75.7921, address: 'Jawahar Nagar, Rewari' },
+    { name: 'Women Helpline Cell', type: 'women', phone: '1091', lat: 26.9082, lng: 75.7982, address: 'Collectorate, MI Road, Rewari' },
   ]
   for (const e of emergencySeeds) {
     await Emergency.create({
@@ -251,7 +240,7 @@ async function seed() {
       phone: e.phone,
       address: e.address,
       location: { type: 'Point', coordinates: [e.lng, e.lat] },
-      city: 'Jaipur',
+      city: 'Rewari',
     })
   }
   console.log(`  emergency contacts: ${emergencySeeds.length}`)
@@ -270,7 +259,7 @@ async function seed() {
     },
     {
       name: 'Startup & Freelance Hub',
-      description: 'For Jaipur based founders, freelancers and remote workers.',
+      description: 'For Rewari based founders, freelancers and remote workers.',
       channels: ['General', 'Job Opportunities', 'Co-working'],
     },
   ]

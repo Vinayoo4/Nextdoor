@@ -52,16 +52,14 @@ export const listPosts = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new ApiError(401, 'Not authenticated')
   const { content, imageUrl, lat, lng } = parseBody(req, createPostSchema)
-  const user = await User.findById(req.user.id).lean()
-  if (!user) throw new ApiError(404, 'User not found')
+  const userId = req.user?.id || '000000000000000000000000'
+  const user = req.user ? await User.findById(userId).lean() : null
 
   const payload: Record<string, unknown> = {
     content,
-    userId: req.user.id,
-    authorName: user.name,
-    authorPhone: req.user.phone,
+    userId,
+    authorName: user?.name || 'Guest User',
   }
   if (imageUrl) payload.imageUrl = imageUrl
   if (lat !== undefined && lng !== undefined) {
@@ -96,19 +94,18 @@ export const listComments = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const addComment = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new ApiError(401, 'Not authenticated')
+  const userId = req.user?.id || '000000000000000000000000'
   const { content } = parseBody(req, createCommentSchema)
   const post = await Post.findById(req.params.id)
   if (!post) throw new ApiError(404, 'Post not found')
 
-  const user = await User.findById(req.user.id).lean()
-  if (!user) throw new ApiError(404, 'User not found')
+  const user = req.user ? await User.findById(userId).lean() : null
 
   const comment = await Comment.create({
     content,
     postId: post._id,
-    userId: req.user.id,
-    authorName: user.name,
+    userId,
+    authorName: user?.name || 'Guest User',
   })
   res.status(201).json({ comment: serializeComment(comment.toObject()) })
 })
