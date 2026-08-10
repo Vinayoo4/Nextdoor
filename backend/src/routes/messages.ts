@@ -5,6 +5,6 @@ import { requireAuth } from '../middleware/auth'
 const router = Router()
 
 router.get('/:id/messages', messageController.listMessages)
-router.post('/:id/messages', requireAuth, messageController.createMessage)
+router.post('/:id/messages', messageController.createMessage)
 
 export default router

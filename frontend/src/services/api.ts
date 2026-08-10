@@ -100,7 +100,7 @@ export const businessesApi = {
   create: (data: Record<string, unknown>) => api.post<{ business: import('@/types').Business }>('/api/businesses', data),
   toggleSave: (id: string) => api.post<{ saved: boolean; points: number }>(`/api/businesses/${id}/save`),
   addReview: (id: string, data: { rating: number; text: string }) =>
-    api.post<{ review: import('@/types').Review }>(`/api/businesses/${id}/review`, data),
+    api.post<{ review: import('@/types').Review }>(`/api/businesses/${id}/reviews`, data, { auth: false }),
 }
 
 export const postsApi = {
@@ -108,22 +108,22 @@ export const postsApi = {
     const qs = new URLSearchParams(params).toString()
     return api.get<{ posts: import('@/types').Post[] }>(`/api/posts${qs ? `?${qs}` : ''}`, { useCache: true })
   },
-  create: (content: string) => api.post<{ post: import('@/types').Post }>('/api/posts', { content }),
+  create: (content: string) => api.post<{ post: import('@/types').Post }>('/api/posts', { content }, { auth: false }),
 }
 
 export const circlesApi = {
   list: () => api.get<CircleListResponse>('/api/circles', { useCache: true }),
   create: (data: { name: string; description: string; initialChannel?: string }) =>
-    api.post<{ circle: import('@/types').Circle }>('/api/circles', data),
+    api.post<{ circle: import('@/types').Circle }>('/api/circles', data, { auth: false }),
   channels: (circleId: string) => api.get<{ channels: import('@/types').Channel[] }>(`/api/circles/${circleId}/channels`),
   createChannel: (circleId: string, name: string) =>
-    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name }),
+    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name }, { auth: false }),
 }
 
 export const messagesApi = {
   list: (channelId: string) => api.get<{ messages: import('@/types').Message[] }>(`/api/channels/${channelId}/messages`),
   send: (channelId: string, content: string) =>
-    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content }),
+    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content }, { auth: false }),
 }
 
 export const emergencyApi = {
@@ -141,4 +141,15 @@ export const buildingsApi = {
 export const waitlistApi = {
   join: (data: { email?: string; phone?: string; city?: string }) =>
     api.post<{ queued: boolean; position: number }>('/api/waitlist', data, { auth: false }),
+}
+
+export const navigationApi = {
+  getRoute: (fromLat: number, fromLng: number, toLat: number, toLng: number) =>
+    api.get<{
+      fallback: boolean
+      distanceKm: number
+      durationSec?: number
+      geometry?: any
+      straightLine?: any
+    }>(`/api/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`, { useCache: false }),
 }
