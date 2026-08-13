@@ -1,4 +1,5 @@
-import { BaseRepository, generateId, now, QueryOptions, PaginatedResult, isDeleted } from './base'
+import { BaseRepository, generateId, now, QueryOptions, PaginatedResult } from './base'
+import { userRepository } from './userRepository'
 
 export type PasteVisibility = 'public' | 'unlisted' | 'private' | 'channel'
 
@@ -54,198 +55,209 @@ export interface PasteAccessCheck {
 }
 
 export class PasteRepository extends BaseRepository {
-  private table = 'pastes'
+  private static inMemoryPastes: PasteWithOwner[] = []
+
+  private pruneExpired(): void {
+    const nowTime = new Date().getTime()
+    PasteRepository.inMemoryPastes = PasteRepository.inMemoryPastes.filter(
+      (p) => !p.expires_at || new Date(p.expires_at).getTime() > nowTime
+    )
+  }
 
   findById(id: string): Paste | null {
-    const row = this.executeQueryOne<Paste>(`SELECT * FROM ${this.table} WHERE id = ?`, [id])
-    return row ? this.deserializeDates(row) : null
+    this.pruneExpired()
+    const p = PasteRepository.inMemoryPastes.find((x) => x.id === id && !x.deleted_at)
+    return p || null
   }
 
   findByIdWithOwner(id: string): PasteWithOwner | null {
-    const row = this.executeQueryOne<PasteWithOwner>(
-      `SELECT p.*, u.name as owner_name FROM ${this.table} p JOIN users u ON p.owner_id = u.id WHERE p.id = ?`,
-      [id]
-    )
-    return row ? this.deserializeDates(row) : null
+    this.pruneExpired()
+    const p = PasteRepository.inMemoryPastes.find((x) => x.id === id && !x.deleted_at)
+    return p || null
   }
 
   findPublic(options: QueryOptions = {}, filters: { language?: string; search?: string } = {}): PaginatedResult<PasteWithOwner> {
-    const conditions: string[] = [
-      'p.deleted_at IS NULL',
-      'p.visibility = \'public\'',
-      '(p.expires_at IS NULL OR p.expires_at > datetime(\'now\'))'
-    ]
-    const params: unknown[] = []
+    this.pruneExpired()
+    
+    let filtered = PasteRepository.inMemoryPastes.filter(
+      (p) => !p.deleted_at && p.visibility === 'public'
+    )
 
     if (filters.language) {
-      conditions.push('p.language = ?')
-      params.push(filters.language)
-    }
-    if (filters.search) {
-      conditions.push('(p.title LIKE ? OR p.content LIKE ?)')
-      const term = `%${filters.search}%`
-      params.push(term, term)
+      filtered = filtered.filter((p) => p.language === filters.language)
     }
 
-    const where = `WHERE ${conditions.join(' AND ')}`
-    const query = `
-      SELECT p.*, u.name as owner_name FROM ${this.table} p
-      JOIN users u ON p.owner_id = u.id
-      ${where}
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `
-    const countQuery = `
-      SELECT COUNT(*) as count FROM ${this.table} p
-      JOIN users u ON p.owner_id = u.id
-      ${where}
-    `
-    
-    const items = this.executeQuery<PasteWithOwner>(query, [...params, options.limit || 20, options.offset || 0]).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, params)?.count || 0
-    
+    if (filters.search) {
+      const s = filters.search.toLowerCase()
+      filtered = filtered.filter(
+        (p) => (p.title && p.title.toLowerCase().includes(s)) || p.content.toLowerCase().includes(s)
+      )
+    }
+
+    // Sort by created_at desc
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const total = filtered.length
+    const limit = options.limit || 20
+    const offset = options.offset || 0
+    const paginated = filtered.slice(offset, offset + limit)
+
     return {
-      items,
+      items: paginated,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 20)) + 1,
-      pageSize: options.limit || 20,
-      totalPages: Math.ceil(total / (options.limit || 20))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 
   findByOwner(ownerId: string, options: QueryOptions = {}): PaginatedResult<Paste> {
-    const where = 'WHERE owner_id = ? AND deleted_at IS NULL'
-    const { query, params } = this.buildSelectQuery(this.table, options, where, [ownerId])
-    const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [ownerId])
+    this.pruneExpired()
+    const filtered = PasteRepository.inMemoryPastes.filter((p) => p.owner_id === ownerId && !p.deleted_at)
     
-    const items = this.executeQuery<Paste>(query, params).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
-    
+    // Sort desc
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const total = filtered.length
+    const limit = options.limit || 50
+    const offset = options.offset || 0
+    const paginated = filtered.slice(offset, offset + limit)
+
     return {
-      items,
+      items: paginated,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 50)) + 1,
-      pageSize: options.limit || 50,
-      totalPages: Math.ceil(total / (options.limit || 50))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 
   findByChannel(channelId: string, options: QueryOptions = {}): PaginatedResult<Paste> {
-    const where = 'WHERE channel_id = ? AND deleted_at IS NULL'
-    const { query, params } = this.buildSelectQuery(this.table, options, where, [channelId])
-    const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [channelId])
+    this.pruneExpired()
+    const filtered = PasteRepository.inMemoryPastes.filter((p) => p.channel_id === channelId && !p.deleted_at)
     
-    const items = this.executeQuery<Paste>(query, params).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
-    
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const total = filtered.length
+    const limit = options.limit || 50
+    const offset = options.offset || 0
+    const paginated = filtered.slice(offset, offset + limit)
+
     return {
-      items,
+      items: paginated,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 50)) + 1,
-      pageSize: options.limit || 50,
-      totalPages: Math.ceil(total / (options.limit || 50))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 
   findBySociety(societyId: string, options: QueryOptions = {}): PaginatedResult<Paste> {
-    const where = 'WHERE society_id = ? AND deleted_at IS NULL'
-    const { query, params } = this.buildSelectQuery(this.table, options, where, [societyId])
-    const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [societyId])
+    this.pruneExpired()
+    const filtered = PasteRepository.inMemoryPastes.filter((p) => p.society_id === societyId && !p.deleted_at)
     
-    const items = this.executeQuery<Paste>(query, params).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
-    
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const total = filtered.length
+    const limit = options.limit || 50
+    const offset = options.offset || 0
+    const paginated = filtered.slice(offset, offset + limit)
+
     return {
-      items,
+      items: paginated,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 50)) + 1,
-      pageSize: options.limit || 50,
-      totalPages: Math.ceil(total / (options.limit || 50))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 
   create(input: CreatePasteInput): Paste {
+    this.pruneExpired()
     const id = generateId()
-    const timestamp = now()
+    const timestamp = new Date()
     const contentSize = Buffer.byteLength(input.content, 'utf8')
     const lineCount = input.content.split('\n').length
-    
-    this.executeRun(
-      `INSERT INTO ${this.table} (id, owner_id, channel_id, society_id, title, content, language, filename, visibility, expires_at, created_at, updated_at, content_size, line_count, view_count, copy_count, download_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)`,
-      [
-        id, input.owner_id, input.channel_id || null, input.society_id || null,
-        input.title || null, input.content, input.language || null, input.filename || null,
-        input.visibility || 'private', input.expires_at ? input.expires_at.toISOString() : null,
-        timestamp, timestamp, contentSize, lineCount
-      ]
-    )
-    
-    return this.findById(id)!
+
+    let ownerName = 'Unknown User'
+    try {
+      const user = userRepository.findById(input.owner_id)
+      if (user) ownerName = user.name
+    } catch {
+      // ignore
+    }
+
+    const paste: PasteWithOwner = {
+      id,
+      owner_id: input.owner_id,
+      owner_name: ownerName,
+      channel_id: input.channel_id || null,
+      society_id: input.society_id || null,
+      title: input.title || null,
+      content: input.content,
+      language: input.language || null,
+      filename: input.filename || null,
+      visibility: input.visibility || 'private',
+      expires_at: input.expires_at || null,
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null,
+      content_size: contentSize,
+      line_count: lineCount,
+      view_count: 0,
+      copy_count: 0,
+      download_count: 0,
+    }
+
+    PasteRepository.inMemoryPastes.push(paste)
+    return paste
   }
 
   update(id: string, input: UpdatePasteInput): Paste | null {
     const existing = this.findById(id)
     if (!existing) return null
 
-    const updates: string[] = []
-    const params: unknown[] = []
-
-    if (input.title !== undefined) { updates.push('title = ?'); params.push(input.title || null) }
-    if (input.content !== undefined) { 
-      updates.push('content = ?'); params.push(input.content)
-      updates.push('content_size = ?'); params.push(Buffer.byteLength(input.content, 'utf8'))
-      updates.push('line_count = ?'); params.push(input.content.split('\n').length)
+    if (input.title !== undefined) existing.title = input.title || null
+    if (input.content !== undefined) {
+      existing.content = input.content
+      existing.content_size = Buffer.byteLength(input.content, 'utf8')
+      existing.line_count = input.content.split('\n').length
     }
-    if (input.language !== undefined) { updates.push('language = ?'); params.push(input.language || null) }
-    if (input.filename !== undefined) { updates.push('filename = ?'); params.push(input.filename || null) }
-    if (input.visibility !== undefined) { updates.push('visibility = ?'); params.push(input.visibility) }
-    if (input.expires_at !== undefined) { updates.push('expires_at = ?'); params.push(input.expires_at ? input.expires_at.toISOString() : null) }
+    if (input.language !== undefined) existing.language = input.language || null
+    if (input.filename !== undefined) existing.filename = input.filename || null
+    if (input.visibility !== undefined) existing.visibility = input.visibility
+    if (input.expires_at !== undefined) existing.expires_at = input.expires_at
 
-    if (updates.length === 0) return existing
-
-    updates.push('updated_at = ?')
-    params.push(now())
-    params.push(id)
-
-    this.executeRun(`UPDATE ${this.table} SET ${updates.join(', ')} WHERE id = ?`, params)
-    return this.findById(id)
+    existing.updated_at = new Date()
+    return existing
   }
 
   softDelete(id: string): boolean {
-    const result = this.executeRun(
-      `UPDATE ${this.table} SET deleted_at = ?, updated_at = ? WHERE id = ?`,
-      [now(), now(), id]
-    )
-    return result.changes > 0
+    const p = PasteRepository.inMemoryPastes.find((x) => x.id === id)
+    if (p) {
+      p.deleted_at = new Date()
+      p.updated_at = new Date()
+      return true
+    }
+    return false
   }
 
   incrementViewCount(id: string): void {
-    this.executeRun(
-      `UPDATE ${this.table} SET view_count = view_count + 1 WHERE id = ?`,
-      [id]
-    )
+    const p = this.findById(id)
+    if (p) p.view_count += 1
   }
 
   incrementCopyCount(id: string): void {
-    this.executeRun(
-      `UPDATE ${this.table} SET copy_count = copy_count + 1 WHERE id = ?`,
-      [id]
-    )
+    const p = this.findById(id)
+    if (p) p.copy_count += 1
   }
 
   incrementDownloadCount(id: string): void {
-    this.executeRun(
-      `UPDATE ${this.table} SET download_count = download_count + 1 WHERE id = ?`,
-      [id]
-    )
+    const p = this.findById(id)
+    if (p) p.download_count += 1
   }
 
   recordView(pasteId: string, viewerId: string | null, ipHash: string | null): void {
-    this.executeRun(
-      `INSERT INTO paste_views (paste_id, viewer_id, ip_hash, created_at) VALUES (?, ?, ?, ?)`,
-      [pasteId, viewerId, ipHash, now()]
-    )
     this.incrementViewCount(pasteId)
   }
 
@@ -269,31 +281,27 @@ export class PasteRepository extends BaseRepository {
   }
 
   getLanguages(): string[] {
-    const rows = this.executeQuery<{ language: string }>(
-      `SELECT DISTINCT language FROM ${this.table} WHERE language IS NOT NULL AND deleted_at IS NULL ORDER BY language`
-    )
-    return rows.map(r => r.language)
+    this.pruneExpired()
+    const langs = new Set<string>()
+    for (const p of PasteRepository.inMemoryPastes) {
+      if (p.language && !p.deleted_at) langs.add(p.language)
+    }
+    return Array.from(langs).sort()
   }
 
   getPopular(limit: number = 10): PasteWithOwner[] {
-    const rows = this.executeQuery<PasteWithOwner>(
-      `SELECT p.*, u.name as owner_name FROM ${this.table} p
-       JOIN users u ON p.owner_id = u.id
-       WHERE p.visibility = 'public' AND p.deleted_at IS NULL AND (p.expires_at IS NULL OR p.expires_at > datetime('now'))
-       ORDER BY p.view_count DESC, p.created_at DESC
-       LIMIT ?`,
-      [limit]
-    )
-    return rows.map(r => this.deserializeDates(r))
+    this.pruneExpired()
+    const filtered = PasteRepository.inMemoryPastes.filter((p) => p.visibility === 'public' && !p.deleted_at)
+    filtered.sort((a, b) => b.view_count - a.view_count)
+    return filtered.slice(0, limit)
   }
 
   getExpiringSoon(hours: number = 24): Paste[] {
-    const future = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
-    const rows = this.executeQuery<Paste>(
-      `SELECT * FROM ${this.table} WHERE visibility = 'public' AND deleted_at IS NULL AND expires_at IS NOT NULL AND expires_at <= ? AND expires_at > datetime('now') ORDER BY expires_at`,
-      [future]
+    this.pruneExpired()
+    const future = new Date(Date.now() + hours * 60 * 60 * 1000)
+    return PasteRepository.inMemoryPastes.filter(
+      (p) => p.visibility === 'public' && !p.deleted_at && p.expires_at && new Date(p.expires_at) <= future
     )
-    return rows.map(r => this.deserializeDates(r))
   }
 }
 

@@ -110,6 +110,7 @@ export function serializeMessage(m: any) {
     type: m.type ?? 'text',
     pasteId: str(m.paste_id ?? m.pasteId ?? null) ?? null,
     createdAt: m.created_at ?? m.createdAt,
+    expiresAt: m.expires_at ?? m.expiresAt ?? null,
   }
 }
 

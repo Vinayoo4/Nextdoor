@@ -45,16 +45,7 @@ export default function Profile() {
           <li>Post in the feed → +1 point</li>
         </ul>
       </div>
-
       <div className="mt-6 space-y-2">
-        <Link
-          to="/pastes"
-          className="btn-outline flex items-center justify-between w-full text-left text-sm font-semibold p-3"
-        >
-          <span>📋 Community Pastebin</span>
-          <span className="text-slate-400">→</span>
-        </Link>
-
         {user?.role === 'admin' && (
           <Link
             to="/authority"

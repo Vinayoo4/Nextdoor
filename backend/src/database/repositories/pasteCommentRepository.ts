@@ -1,4 +1,5 @@
 import { BaseRepository, generateId, now, QueryOptions, PaginatedResult } from './base'
+import { userRepository } from './userRepository'
 
 export interface PasteComment {
   id: string
@@ -17,28 +18,35 @@ export interface CreatePasteCommentInput {
 }
 
 export class PasteCommentRepository extends BaseRepository {
-  private table = 'paste_comments'
+  private static inMemoryComments: PasteComment[] = []
 
   findById(id: string): PasteComment | null {
-    const row = this.executeQueryOne<PasteComment>(`SELECT * FROM ${this.table} WHERE id = ? AND deleted_at IS NULL`, [id])
-    return row ? this.deserializeDates(row) : null
+    const c = PasteCommentRepository.inMemoryComments.find((x) => x.id === id && !x.deleted_at)
+    return c || null
   }
 
   findByPasteId(pasteId: string, options: QueryOptions = {}): PaginatedResult<PasteComment & { user_name: string }> {
     const limit = options.limit || 50
     const offset = options.offset || 0
-    const query = `
-      SELECT c.*, u.name as user_name FROM ${this.table} c
-      JOIN users u ON c.user_id = u.id
-      WHERE c.paste_id = ? AND c.deleted_at IS NULL
-      ORDER BY c.created_at ASC
-      LIMIT ? OFFSET ?
-    `
-    const countQuery = `SELECT COUNT(*) as count FROM ${this.table} WHERE paste_id = ? AND deleted_at IS NULL`
-    
-    const items = this.executeQuery<PasteComment & { user_name: string }>(query, [pasteId, limit, offset]).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, [pasteId])?.count || 0
-    
+
+    const filtered = PasteCommentRepository.inMemoryComments.filter(
+      (c) => c.paste_id === pasteId && !c.deleted_at
+    )
+
+    // Sort ASC by created_at
+    filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+    const total = filtered.length
+    const paginated = filtered.slice(offset, offset + limit)
+
+    const items = paginated.map((c) => {
+      const user = userRepository.findById(c.user_id)
+      return {
+        ...c,
+        user_name: user?.name || 'Unknown User'
+      }
+    })
+
     return {
       items,
       total,
@@ -50,42 +58,45 @@ export class PasteCommentRepository extends BaseRepository {
 
   create(input: CreatePasteCommentInput): PasteComment {
     const id = generateId()
-    const timestamp = now()
-    
-    this.executeRun(
-      `INSERT INTO ${this.table} (id, paste_id, user_id, content, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, input.paste_id, input.user_id, input.content, timestamp, timestamp]
-    )
-    
-    return this.findById(id)!
+    const timestamp = new Date()
+
+    const comment: PasteComment = {
+      id,
+      paste_id: input.paste_id,
+      user_id: input.user_id,
+      content: input.content,
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null
+    }
+
+    PasteCommentRepository.inMemoryComments.push(comment)
+    return comment
   }
 
   update(id: string, content: string): PasteComment | null {
-    const existing = this.findById(id)
-    if (!existing) return null
+    const c = this.findById(id)
+    if (!c) return null
 
-    this.executeRun(
-      `UPDATE ${this.table} SET content = ?, updated_at = ? WHERE id = ?`,
-      [content, now(), id]
-    )
-    return this.findById(id)
+    c.content = content
+    c.updated_at = new Date()
+    return c
   }
 
   softDelete(id: string): boolean {
-    const result = this.executeRun(
-      `UPDATE ${this.table} SET deleted_at = ?, updated_at = ? WHERE id = ?`,
-      [now(), now(), id]
-    )
-    return result.changes > 0
+    const c = PasteCommentRepository.inMemoryComments.find((x) => x.id === id)
+    if (c) {
+      c.deleted_at = new Date()
+      c.updated_at = new Date()
+      return true
+    }
+    return false
   }
 
   getPasteCommentCount(pasteId: string): number {
-    const row = this.executeQueryOne<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.table} WHERE paste_id = ? AND deleted_at IS NULL`,
-      [pasteId]
-    )
-    return row?.count || 0
+    return PasteCommentRepository.inMemoryComments.filter(
+      (c) => c.paste_id === pasteId && !c.deleted_at
+    ).length
   }
 }
 

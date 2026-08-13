@@ -131,8 +131,8 @@ export const circlesApi = {
 
 export const messagesApi = {
   list: (channelId: string) => api.get<{ messages: import('@/types').Message[] }>(`/api/channels/${channelId}/messages`),
-  send: (channelId: string, content: string) =>
-    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content }, { auth: false }),
+  send: (channelId: string, content: string, expiresIn?: 'none' | '10m' | '1h' | '1d' | '1w') =>
+    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content, expiresIn }, { auth: false }),
 }
 
 export const emergencyApi = {

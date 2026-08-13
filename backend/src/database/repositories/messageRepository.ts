@@ -11,6 +11,7 @@ export interface Message {
   created_at: Date
   updated_at: Date
   deleted_at: Date | null
+  expires_at: Date | null
 }
 
 export interface CreateMessageInput {
@@ -20,69 +21,98 @@ export interface CreateMessageInput {
   content: string
   type?: 'text' | 'paste'
   paste_id?: string
+  expires_at?: Date | null
 }
 
 export class MessageRepository extends BaseRepository {
-  private table = 'messages'
+  private static inMemoryMessages: Message[] = []
+
+  private pruneExpired(): void {
+    const nowTime = new Date().getTime()
+    MessageRepository.inMemoryMessages = MessageRepository.inMemoryMessages.filter(
+      (m) => !m.expires_at || new Date(m.expires_at).getTime() > nowTime
+    )
+  }
 
   findById(id: string): Message | null {
-    const row = this.executeQueryOne<Message>(`SELECT * FROM ${this.table} WHERE id = ? AND deleted_at IS NULL`, [id])
-    return row ? this.deserializeDates(row) : null
+    this.pruneExpired()
+    const msg = MessageRepository.inMemoryMessages.find((m) => m.id === id && !m.deleted_at)
+    return msg || null
   }
 
   findByChannelId(channelId: string, options: QueryOptions = {}): PaginatedResult<Message> {
-    const where = 'WHERE channel_id = ? AND deleted_at IS NULL'
-    const { query, params } = this.buildSelectQuery(this.table, options, where, [channelId])
-    const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [channelId])
+    this.pruneExpired()
     
-    const items = this.executeQuery<Message>(query, params).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
-    
+    let filtered = MessageRepository.inMemoryMessages.filter(
+      (m) => m.channel_id === channelId && !m.deleted_at
+    )
+
+    // Sort by created_at (options.orderBy, options.orderDir)
+    const orderDir = options.orderDir || 'DESC'
+    filtered.sort((a, b) => {
+      const tA = new Date(a.created_at).getTime()
+      const tB = new Date(b.created_at).getTime()
+      return orderDir === 'ASC' ? tA - tB : tB - tA
+    })
+
+    const total = filtered.length
+    const limit = options.limit || 50
+    const offset = options.offset || 0
+    const paginated = filtered.slice(offset, offset + limit)
+
     return {
-      items,
+      items: paginated,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 50)) + 1,
-      pageSize: options.limit || 50,
-      totalPages: Math.ceil(total / (options.limit || 50))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 
   findByPasteId(pasteId: string): Message | null {
-    const row = this.executeQueryOne<Message>(
-      `SELECT * FROM ${this.table} WHERE paste_id = ? AND deleted_at IS NULL`,
-      [pasteId]
-    )
-    return row ? this.deserializeDates(row) : null
+    this.pruneExpired()
+    const msg = MessageRepository.inMemoryMessages.find((m) => m.paste_id === pasteId && !m.deleted_at)
+    return msg || null
   }
 
   create(input: CreateMessageInput): Message {
+    this.pruneExpired()
     const id = generateId()
-    const timestamp = now()
-    
-    this.executeRun(
-      `INSERT INTO ${this.table} (id, channel_id, user_id, author_name, content, type, paste_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.channel_id, input.user_id, input.author_name, input.content, 
-       input.type || 'text', input.paste_id || null, timestamp, timestamp]
-    )
-    
-    return this.findById(id)!
+    const timestamp = new Date()
+
+    const message: Message = {
+      id,
+      channel_id: input.channel_id,
+      user_id: input.user_id,
+      author_name: input.author_name,
+      content: input.content,
+      type: input.type || 'text',
+      paste_id: input.paste_id || null,
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null,
+      expires_at: input.expires_at || null,
+    }
+
+    MessageRepository.inMemoryMessages.push(message)
+    return message
   }
 
   softDelete(id: string): boolean {
-    const result = this.executeRun(
-      `UPDATE ${this.table} SET deleted_at = ?, updated_at = ? WHERE id = ?`,
-      [now(), now(), id]
-    )
-    return result.changes > 0
+    const msg = MessageRepository.inMemoryMessages.find((m) => m.id === id)
+    if (msg) {
+      msg.deleted_at = new Date()
+      msg.updated_at = new Date()
+      return true
+    }
+    return false
   }
 
   getChannelMessageCount(channelId: string): number {
-    const row = this.executeQueryOne<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${this.table} WHERE channel_id = ? AND deleted_at IS NULL`,
-      [channelId]
-    )
-    return row?.count || 0
+    this.pruneExpired()
+    return MessageRepository.inMemoryMessages.filter(
+      (m) => m.channel_id === channelId && !m.deleted_at
+    ).length
   }
 }
 

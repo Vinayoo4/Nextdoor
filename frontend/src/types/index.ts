@@ -103,6 +103,7 @@ export interface Message {
   createdAt: string
   type?: 'text' | 'paste'
   pasteId?: string | null
+  expiresAt?: string | null
 }
 
 export interface Paste {

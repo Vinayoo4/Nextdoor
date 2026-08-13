@@ -26,6 +26,7 @@ export default function CircleDetail() {
   const [pasteContent, setPasteContent] = useState('')
   const [pasteExpiresIn, setPasteExpiresIn] = useState<'none' | '10m' | '1h' | '1d' | '1w'>('none')
   const [sharingPaste, setSharingPaste] = useState(false)
+  const [messageExpiresIn, setMessageExpiresIn] = useState<'none' | '10m' | '1h' | '1d' | '1w'>('none')
 
   useEffect(() => {
     if (!id) return
@@ -44,15 +45,36 @@ export default function CircleDetail() {
 
   useEffect(() => {
     if (!activeId) return
-    messagesApi
-      .list(activeId)
-      .then((res) => setMessages(res.messages))
-      .catch(() => setMessages([]))
-  }, [activeId])
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, activeId])
+    const loadMessages = () => {
+      messagesApi
+        .list(activeId)
+        .then((res) => {
+          setMessages((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(res.messages)) {
+              return prev
+            }
+            const isNearBottom = scrollRef.current 
+              ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 120
+              : true
+
+            if (isNearBottom) {
+              setTimeout(() => {
+                if (scrollRef.current) {
+                  scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+                }
+              }, 50)
+            }
+            return res.messages
+          })
+        })
+        .catch(() => setMessages([]))
+    }
+
+    loadMessages()
+    const interval = setInterval(loadMessages, 4000)
+    return () => clearInterval(interval)
+  }, [activeId])
 
   const activeChannel = channels.find((c) => c.id === activeId)
 
@@ -61,9 +83,14 @@ export default function CircleDetail() {
     if (!activeId || !content.trim()) return
     setSending(true)
     try {
-      const res = await messagesApi.send(activeId, content.trim())
+      const res = await messagesApi.send(activeId, content.trim(), messageExpiresIn)
       setMessages((m) => [...m, res.message])
       setContent('')
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      }, 50)
     } catch {
       // offline: message not sent, keep text
     } finally {
@@ -157,7 +184,14 @@ export default function CircleDetail() {
               {m.authorName[0]?.toUpperCase()}
             </span>
             <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2">
-              <p className="text-xs font-bold text-slate-700">{m.authorName}</p>
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <p className="text-xs font-bold text-slate-700">{m.authorName}</p>
+                {m.expiresAt && (
+                  <span className="text-[9px] text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0" title="Disappearing message">
+                    ⏱️ {getExpiresInLabel(m.expiresAt)}
+                  </span>
+                )}
+              </div>
               {m.type === 'paste' ? (
                 <div className="mt-1 rounded-lg bg-slate-900 border border-slate-800 p-2.5 text-left min-w-[200px]">
                   <div className="flex items-center justify-between gap-4 border-b border-slate-700 pb-1 text-[10px] font-mono text-slate-400">
@@ -185,11 +219,11 @@ export default function CircleDetail() {
         )}
       </div>
 
-      <form onSubmit={send} className="mt-3 flex gap-2">
+      <form onSubmit={send} className="mt-3 flex gap-2 items-center">
         <button
           type="button"
           onClick={() => setShowPasteModal(true)}
-          className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-sm text-slate-600 shadow-sm shrink-0"
+          className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2.5 text-sm text-slate-600 shadow-sm shrink-0"
           title="Share Code Paste"
         >
           📄
@@ -201,6 +235,18 @@ export default function CircleDetail() {
           onChange={(e) => setContent(e.target.value)}
           maxLength={1000}
         />
+        <select
+          value={messageExpiresIn}
+          onChange={(e) => setMessageExpiresIn(e.target.value as any)}
+          className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2 py-2.5 text-xs text-slate-600 shadow-sm shrink-0 focus:outline-none focus:border-primary"
+          title="Disappearance Limit"
+        >
+          <option value="none">⏱️ Keep</option>
+          <option value="10m">⏱️ 10m</option>
+          <option value="1h">⏱️ 1h</option>
+          <option value="1d">⏱️ 1d</option>
+          <option value="1w">⏱️ 1w</option>
+        </select>
         <button type="submit" disabled={sending || !content.trim()} className="btn-primary shrink-0">
           Send
         </button>
@@ -307,4 +353,15 @@ export default function CircleDetail() {
       )}
     </div>
   )
+}
+
+function getExpiresInLabel(expiresAtStr: string) {
+  const diffMs = new Date(expiresAtStr).getTime() - new Date().getTime()
+  if (diffMs <= 0) return 'Expired'
+  const diffMins = Math.ceil(diffMs / 60000)
+  if (diffMins < 60) return `${diffMins}m`
+  const diffHours = Math.ceil(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h`
+  const diffDays = Math.ceil(diffHours / 24)
+  return `${diffDays}d`
 }

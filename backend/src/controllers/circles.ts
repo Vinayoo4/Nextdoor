@@ -20,6 +20,7 @@ const createChannelSchema = z.object({
 
 const createMessageSchema = z.object({
   content: z.string().min(1, 'Message is required').max(1000),
+  expiresIn: z.enum(['none', '10m', '1h', '1d', '1w']).default('none'),
 })
 
 export const listCircles = asyncHandler(async (_req: Request, res: Response) => {
@@ -84,20 +85,40 @@ export const listMessages = asyncHandler(async (req: Request, res: Response) => 
   res.json({ messages: result.items.map(serializeMessage) })
 })
 
+function calculateExpiresAt(expiresIn?: string): Date | null {
+  if (!expiresIn) return null
+  const now = new Date()
+  switch (expiresIn) {
+    case '10m':
+      return new Date(now.getTime() + 10 * 60 * 1000)
+    case '1h':
+      return new Date(now.getTime() + 60 * 60 * 1000)
+    case '1d':
+      return new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    case '1w':
+      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    case 'none':
+    default:
+      return null
+  }
+}
+
 export const createMessage = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const { content } = parseBody(req, createMessageSchema)
+  const { content, expiresIn } = parseBody(req, createMessageSchema)
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
   const user = req.user ? userRepository.findById(userId) : null
+  const expiresAt = calculateExpiresAt(expiresIn)
 
   const message = messageRepository.create({
     content,
     channel_id: channel.id,
     user_id: userId,
     author_name: user?.name || 'Guest User',
-    type: 'text'
+    type: 'text',
+    expires_at: expiresAt
   })
 
   res.status(201).json({ message: serializeMessage(message) })
