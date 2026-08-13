@@ -155,7 +155,7 @@ export class CircleRepository extends BaseRepository {
   }
 
   getMembers(circleId: string): Array<{ user_id: string; role: string; joined_at: Date }> {
-    return this.executeQuery(
+    return this.executeQuery<{ user_id: string; role: string; joined_at: Date }>(
       `SELECT user_id, role, joined_at FROM circle_members WHERE circle_id = ? ORDER BY joined_at`,
       [circleId]
     ).map(r => this.deserializeDates(r))

@@ -23,7 +23,8 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   name?: string
-  password_hash?: string
+  email?: string
+  password_hash?: string | null
   role?: 'user' | 'owner' | 'admin'
   locality_id?: string
   points?: number
@@ -80,6 +81,7 @@ export class UserRepository extends BaseRepository {
     const params: unknown[] = []
 
     if (input.name !== undefined) { updates.push('name = ?'); params.push(input.name) }
+    if (input.email !== undefined) { updates.push('email = ?'); params.push(input.email.toLowerCase()) }
     if (input.password_hash !== undefined) { updates.push('password_hash = ?'); params.push(input.password_hash) }
     if (input.role !== undefined) { updates.push('role = ?'); params.push(input.role) }
     if (input.locality_id !== undefined) { updates.push('locality_id = ?'); params.push(input.locality_id) }

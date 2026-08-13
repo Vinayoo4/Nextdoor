@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import mongoose from 'mongoose'
-import { Business, slugify, BUSINESS_CATEGORIES } from '../models/Business'
-import { Review } from '../models/Review'
-import { Offer } from '../models/Offer'
-import { User } from '../models/User'
+import { businessRepository, BUSINESS_CATEGORIES } from '../database/repositories/businessRepository'
+import { businessClaimRepository } from '../database/repositories/businessClaimRepository'
+import { reviewRepository } from '../database/repositories/reviewRepository'
+import { offerRepository } from '../database/repositories/offerRepository'
+import { userRepository } from '../database/repositories/userRepository'
+import { userSavedPlacesRepository } from '../database/repositories/userSavedPlacesRepository'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import {
@@ -16,7 +17,7 @@ import {
 
 const createBusinessSchema = z.object({
   name: z.string().min(1, 'Name is required').max(80),
-  category: z.enum(BUSINESS_CATEGORIES),
+  category: z.enum(BUSINESS_CATEGORIES as unknown as [string, ...string[]]),
   subcategory: z.string().max(40).optional().or(z.literal('')),
   description: z.string().max(2000).optional().or(z.literal('')),
   address: z.string().min(3, 'Address is required').max(200),
@@ -51,7 +52,7 @@ const listBusinessesSchema = z.object({
   openNow: z.enum(['true', 'false']).optional(),
   owner: z.string().optional(),
   page: z.coerce.number().min(1).optional(),
-  limit: z.coerce.number().min(1).max(50).optional(),
+  limit: z.coerce.number().min(1).optional(),
 })
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
@@ -73,46 +74,41 @@ export const listBusinesses = asyncHandler(async (req: Request, res: Response) =
   const { lat, lng, radius, category, q, verified, openNow, owner, page, limit } = listBusinessesSchema.parse(req.query)
   const pageNum = Math.max(page ?? 1, 1)
   const pageSize = Math.min(Math.max(limit ?? 20, 1), 50)
+  const offset = (pageNum - 1) * pageSize
 
-  const filter: Record<string, unknown> = { status: 'active' }
-  if (category && category !== 'All') filter.category = category
-  if (verified === 'true') filter.verified = true
-  if (owner === 'me' && req.user) filter.ownerId = new mongoose.Types.ObjectId(req.user.id)
+  const filters: any = { status: 'active' }
+  if (category && category !== 'All') filters.category = category
+  if (verified === 'true') filters.verified = true
+  if (owner === 'me' && req.user) filters.owner_id = req.user.id
+  if (q && q.trim()) filters.search = q.trim()
+
+  let result
   if (lat !== undefined && lng !== undefined && radius !== undefined) {
-    filter.location = {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [lng, lat] },
-        $maxDistance: radius * 1000,
-      },
-    }
-  }
-  if (q && q.trim()) {
-    const re = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-    filter.$or = [{ name: re }, { category: re }, { tags: re }, { subcategory: re }]
+    result = businessRepository.findNearby(lat, lng, radius, { limit: pageSize, offset }, filters)
+  } else {
+    result = businessRepository.findAll({ limit: pageSize, offset }, filters)
   }
 
-  const [docs, total] = await Promise.all([
-    Business.find(filter)
-      .sort({ plan: -1, _id: -1 })
-      .skip((pageNum - 1) * pageSize)
-      .limit(pageSize)
-      .lean(),
-    Business.countDocuments(filter),
-  ])
+  let items = result.items.map(serializeBusiness)
+  if (openNow === 'true') {
+    items = items.filter((b) => isOpenNow(b.hours as any))
+  }
 
-  let items = docs.map(serializeBusiness)
-  if (openNow === 'true') items = items.filter((b) => isOpenNow(b.hours as never))
-
-  res.json({ businesses: items, page: pageNum, pages: Math.ceil(total / pageSize), total })
+  res.json({
+    businesses: items,
+    page: pageNum,
+    pages: Math.ceil(result.total / pageSize),
+    total: result.total,
+  })
 })
 
 export const createBusiness = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
   const data = parseBody(req, createBusinessSchema)
-  const baseSlug = slugify(data.name)
+  const baseSlug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
   const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`
 
-  const business = await Business.create({
+  const business = businessRepository.create({
     name: data.name,
     slug,
     category: data.category,
@@ -129,23 +125,20 @@ export const createBusiness = asyncHandler(async (req: Request, res: Response) =
       homeDelivery: data.attributes?.homeDelivery ?? false,
     },
     hours: data.hours ?? {},
-    location: { type: 'Point', coordinates: [data.lng, data.lat] },
-    ownerId: userId,
+    location_lat: data.lat,
+    location_lng: data.lng,
+    owner_id: userId,
   })
 
-  res.status(201).json({ business: serializeBusiness(business.toObject()) })
+  res.status(201).json({ business: serializeBusiness(business) })
 })
 
 export const getBusinessBySlug = asyncHandler(async (req: Request, res: Response) => {
-  const business = await Business.findOne({ slug: req.params.slug }).lean()
+  const business = businessRepository.findBySlug(req.params.slug)
   if (!business) throw new ApiError(404, 'Business not found')
 
-  const [reviews, offers] = await Promise.all([
-    Review.find({ businessId: business._id }).sort({ createdAt: -1 }).limit(50).lean(),
-    Offer.find({ businessId: business._id, status: 'active', validTo: { $gte: new Date() } })
-      .sort({ validTo: 1 })
-      .lean(),
-  ])
+  const reviews = reviewRepository.findByBusinessId(business.id)
+  const offers = offerRepository.findByBusinessId(business.id)
 
   res.json({
     business: serializeBusiness(business),
@@ -156,11 +149,13 @@ export const getBusinessBySlug = asyncHandler(async (req: Request, res: Response
 
 export const updateBusiness = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const business = await Business.findById(req.params.id)
+  const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
-  if (String(business.ownerId) !== userId && req.user?.role !== 'admin') {
+  
+  if (business.owner_id !== userId && req.user?.role !== 'admin') {
     throw new ApiError(403, 'Only the owner or an admin can edit this business')
   }
+
   const { name, description, phone, whatsapp, photos, attributes, hours } = parseBody(
     req,
     z.object({
@@ -173,97 +168,125 @@ export const updateBusiness = asyncHandler(async (req: Request, res: Response) =
       hours: z.record(z.object({ open: z.string(), close: z.string() })).optional(),
     })
   )
-  if (name) business.name = name
-  if (description !== undefined) business.description = description || undefined
-  if (phone) business.phone = phone
-  if (whatsapp !== undefined) business.whatsapp = whatsapp || undefined
-  if (photos) business.photos = photos
-  if (attributes) business.attributes = { ...business.attributes, ...attributes }
-  if (hours) business.hours = hours
-  await business.save()
-  res.json({ business: serializeBusiness(business.toObject()) })
+
+  const updated = businessRepository.update(req.params.id, {
+    name,
+    description,
+    phone,
+    whatsapp,
+    photos,
+    attributes: attributes ? {
+      parking: !!attributes.parking,
+      cards: !!attributes.cards,
+      homeDelivery: !!attributes.homeDelivery,
+    } : undefined,
+    hours
+  })
+
+  res.json({ business: serializeBusiness(updated) })
 })
 
 export const claimBusiness = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const business = await Business.findById(req.params.id)
+  const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
-  if (business.ownerId) throw new ApiError(409, 'This business is already claimed')
-  business.ownerId = new mongoose.Types.ObjectId(userId)
-  await business.save()
+  if (business.owner_id) throw new ApiError(409, 'This business is already claimed')
 
-  const user = req.user ? await User.findById(userId) : null
-  if (user && user.role === 'user') {
-    user.role = 'owner'
-    await user.save()
+  const { contactName, contactPhone, contactEmail, verificationNote, evidenceReference } = parseBody(
+    req,
+    z.object({
+      contactName: z.string().min(1, 'Contact name is required'),
+      contactPhone: z.string().min(7, 'Contact phone is required'),
+      contactEmail: z.string().email('Enter a valid email address'),
+      verificationNote: z.string().max(1000).optional().or(z.literal('')),
+      evidenceReference: z.string().max(500).optional().or(z.literal('')),
+    })
+  )
+
+  // Check if a pending claim already exists
+  const existingClaim = businessClaimRepository.findByBusinessId(business.id)
+  if (existingClaim && existingClaim.status === 'pending') {
+    throw new ApiError(409, 'A claim request for this business is already pending')
   }
 
-  res.json({ business: serializeBusiness(business.toObject()) })
+  const request = businessClaimRepository.create({
+    business_id: business.id,
+    requester_id: userId,
+    private_contact_name: contactName,
+    private_contact_phone: contactPhone,
+    private_contact_email: contactEmail,
+    verification_note: verificationNote || undefined,
+    evidence_reference: evidenceReference || undefined,
+  })
+
+  res.status(201).json({ message: 'Claim request submitted successfully', request })
 })
 
 export const addReview = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000' // mock user for testing without auth
+  const userId = req.user?.id || '000000000000000000000000'
   const { rating, text } = parseBody(req, reviewSchema)
-  const business = await Business.findById(req.params.id)
+  const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
 
-  const existing = req.user ? await Review.findOne({ businessId: business._id, userId }) : null
+  const existing = req.user ? reviewRepository.findByUserAndBusiness(userId, business.id) : null
   if (existing) throw new ApiError(409, 'You have already reviewed this business')
 
-  const review = await Review.create({ businessId: business._id, userId, rating, text })
+  reviewRepository.create({
+    business_id: business.id,
+    user_id: userId,
+    rating,
+    text
+  })
 
-  const [agg] = await Review.aggregate<{ avg: number; count: number }>([
-    { $match: { businessId: business._id } },
-    { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } },
-  ])
-  business.ratingAvg = agg ? Math.round(agg.avg * 10) / 10 : rating
-  business.ratingCount = agg ? agg.count : 1
-  await business.save()
+  // Recalculate average rating
+  const updatedBusiness = businessRepository.updateRating(business.id)!
 
-  const user = req.user ? await User.findById(userId) : null
+  const user = req.user ? userRepository.findById(userId) : null
   if (user) {
-    user.points += 5
-    await user.save()
+    userRepository.addPoints(userId, 5)
   }
 
-  res.status(201).json({ review: serializeReview(review.toObject()) })
+  res.status(201).json({ review: serializeReview(reviewRepository.findByUserAndBusiness(userId, business.id)!) })
 })
 
 export const toggleSave = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const business = await Business.findById(req.params.id)
+  const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
-  const user = req.user ? await User.findById(userId) : null
+
+  const user = req.user ? userRepository.findById(userId) : null
   if (!user) return res.json({ saved: false, points: 0 })
 
-  const idx = user.savedPlaces.findIndex((p: import('mongoose').Types.ObjectId) => String(p) === req.params.id)
+  const wasSaved = userSavedPlacesRepository.isSaved(userId, business.id)
   let saved: boolean
-  if (idx >= 0) {
-    user.savedPlaces.splice(idx, 1)
+  if (wasSaved) {
+    userSavedPlacesRepository.unsave(userId, business.id)
     saved = false
   } else {
-    user.savedPlaces.push(business._id)
+    userSavedPlacesRepository.save(userId, business.id)
     saved = true
-    user.points += 2
+    userRepository.addPoints(userId, 2)
   }
-  await user.save()
 
-  res.json({ saved, points: user.points })
+  const updatedUser = userRepository.findById(userId)!
+  res.json({ saved, points: updatedUser.points })
 })
 
 export const listSaved = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? await User.findById(userId) : null
+  const user = req.user ? userRepository.findById(userId) : null
   if (!user) return res.json({ businesses: [] })
-  const saved = await Business.find({ _id: { $in: user.savedPlaces } }).sort({ _id: -1 }).lean()
+
+  const savedIds = userSavedPlacesRepository.getSavedBusinesses(userId)
+  const saved = savedIds.map(id => businessRepository.findById(id)).filter(Boolean)
   res.json({ businesses: saved.map(serializeBusiness) })
 })
 
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? await User.findById(userId).lean() : null
+  const user = req.user ? userRepository.findById(userId) : null
   if (!user) throw new ApiError(404, 'User not found')
-  res.json({ user: serializeUser(user as any) })
+  res.json({ user: serializeUser(user) })
 })
 
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -275,11 +298,12 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
       email: z.string().email().optional().or(z.literal('')),
     })
   )
-  const user = req.user ? await User.findById(userId) : null
+  const user = req.user ? userRepository.findById(userId) : null
   if (!user) throw new ApiError(404, 'User not found')
-  if (name) user.name = name
-  if (email !== undefined) user.email = email || (user as any).email
-  await user.save()
-  res.json({ user: serializeUser(user.toObject()) })
-})
 
+  const updated = userRepository.update(userId, {
+    name,
+    email: email || undefined
+  })!
+  res.json({ user: serializeUser(updated) })
+})

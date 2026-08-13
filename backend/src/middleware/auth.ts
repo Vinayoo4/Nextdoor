@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
-import { User } from '../models/User'
+import { userRepository } from '../database/repositories/userRepository'
 import { verifyToken } from '../utils/jwt'
 import { ApiError, asyncHandler } from '../utils/errors'
 
@@ -31,20 +31,38 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
     return next(new ApiError(401, 'Invalid or expired token'))
   }
 
-  void User.findById(payload.userId)
-    .select('_id email role')
-    .lean()
-    .then((user) => {
-      if (!user) return next(new ApiError(401, 'User no longer exists'))
-      req.user = { id: String(user._id), email: (user as any).email, role: user.role }
-      next()
-    })
-    .catch(() => next(new ApiError(500, 'Authentication error')))
+  try {
+    const user = userRepository.findById(payload.userId)
+    if (!user) return next(new ApiError(401, 'User no longer exists'))
+    req.user = { id: user.id, email: user.email, role: user.role }
+    next()
+  } catch {
+    next(new ApiError(500, 'Authentication error'))
+  }
 }
 
 export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
   if (req.user?.role !== 'admin') {
     return next(new ApiError(403, 'Admin access required'))
+  }
+  next()
+}
+
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  const header = req.headers.authorization
+  if (!header?.startsWith('Bearer ')) {
+    return next()
+  }
+
+  const token = header.slice(7)
+  try {
+    const payload = verifyToken(token)
+    const user = userRepository.findById(payload.userId)
+    if (user) {
+      req.user = { id: user.id, email: user.email, role: user.role }
+    }
+  } catch {
+    // Ignore invalid/expired tokens for optional auth
   }
   next()
 }

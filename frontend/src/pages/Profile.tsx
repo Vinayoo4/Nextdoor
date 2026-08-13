@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 
 export default function Profile() {
@@ -44,6 +44,26 @@ export default function Profile() {
           <li>Write a review → +5 points</li>
           <li>Post in the feed → +1 point</li>
         </ul>
+      </div>
+
+      <div className="mt-6 space-y-2">
+        <Link
+          to="/pastes"
+          className="btn-outline flex items-center justify-between w-full text-left text-sm font-semibold p-3"
+        >
+          <span>📋 Community Pastebin</span>
+          <span className="text-slate-400">→</span>
+        </Link>
+
+        {user?.role === 'admin' && (
+          <Link
+            to="/authority"
+            className="btn-outline border-red-200 hover:bg-red-50/20 flex items-center justify-between w-full text-left text-sm font-semibold p-3 text-red-700"
+          >
+            <span>🚨 Civic Authority Portal (Admin)</span>
+            <span className="text-red-400">→</span>
+          </Link>
+        )}
       </div>
 
       <button onClick={signOut} className="btn-danger mt-6 w-full">

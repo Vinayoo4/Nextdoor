@@ -101,6 +101,68 @@ export interface Message {
   userId: string
   authorName: string
   createdAt: string
+  type?: 'text' | 'paste'
+  pasteId?: string | null
+}
+
+export interface Paste {
+  id: string
+  ownerId: string
+  ownerName: string
+  channelId: string | null
+  societyId: string | null
+  title: string | null
+  content: string
+  language: string | null
+  filename: string | null
+  visibility: 'public' | 'unlisted' | 'private' | 'channel'
+  views: number
+  downloads: number
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PasteComment {
+  id: string
+  pasteId: string
+  userId: string
+  userName: string
+  content: string
+  createdAt: string
+}
+
+export interface BusinessClaimRequest {
+  id: string
+  businessId: string
+  businessName?: string
+  requesterId: string
+  requesterName?: string
+  requesterEmail?: string
+  privateContactName: string
+  privateContactPhone: string
+  privateContactEmail: string
+  verificationNote: string | null
+  evidenceReference: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  reviewedBy: string | null
+  reviewedAt: string | null
+  adminNote: string | null
+  createdAt: string
+}
+
+export interface Article {
+  id: string
+  slug: string
+  title: string
+  contentMarkdown: string
+  category: 'history' | 'heritage' | 'places' | 'services' | 'businesses' | 'events' | 'future' | 'guides'
+  locality: string | null
+  status: 'draft' | 'pending_review' | 'published' | 'rejected' | 'archived'
+  authorId: string
+  sourceReference: string | null
+  publishedAt: string | null
+  createdAt: string
 }
 
 export interface Building {

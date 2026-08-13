@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { Business, Offer, Review } from '@/types'
 import { businessesApi } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 import MapView from '@/components/MapView'
 import RatingStars from '@/components/RatingStars'
 import { Spinner, ErrorBox } from '@/components/UI'
@@ -10,6 +11,9 @@ import { todayHours } from '@/utils/format'
 
 export default function BusinessDetail() {
   const { slug } = useParams<{ slug: string }>()
+  const token = useAuthStore((s) => s.token)
+  const user = useAuthStore((s) => s.user)
+
   const [business, setBusiness] = useState<Business | null>(null)
   const [offers, setOffers] = useState<Offer[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
@@ -19,6 +23,17 @@ export default function BusinessDetail() {
   const [rating, setRating] = useState(0)
   const [text, setText] = useState('')
   const [reviewError, setReviewError] = useState('')
+
+  // Claim states
+  const [showClaimForm, setShowClaimForm] = useState(false)
+  const [claimName, setClaimName] = useState(user?.name || '')
+  const [claimPhone, setClaimPhone] = useState('')
+  const [claimEmail, setClaimEmail] = useState(user?.email || '')
+  const [claimEvidence, setClaimEvidence] = useState('')
+  const [claimNote, setClaimNote] = useState('')
+  const [claimLoading, setClaimLoading] = useState(false)
+  const [claimSuccess, setClaimSuccess] = useState(false)
+  const [claimError, setClaimError] = useState('')
 
   useEffect(() => {
     if (!slug) return
@@ -48,6 +63,31 @@ export default function BusinessDetail() {
       setSaved(res.saved)
     } catch {
       // ignore save errors in offline mode
+    }
+  }
+
+  async function handleClaimSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!claimName.trim() || !claimPhone.trim() || !claimEmail.trim()) {
+      setClaimError('Please fill in all required fields')
+      return
+    }
+
+    setClaimLoading(true)
+    setClaimError('')
+    try {
+      await businessesApi.claim(b.id, {
+        contactName: claimName.trim(),
+        contactPhone: claimPhone.trim(),
+        contactEmail: claimEmail.trim(),
+        verificationNote: claimNote.trim() || undefined,
+        evidenceReference: claimEvidence.trim() || undefined,
+      })
+      setClaimSuccess(true)
+    } catch (err: any) {
+      setClaimError(err.message || 'Failed to submit verification claim')
+    } finally {
+      setClaimLoading(false)
     }
   }
 
@@ -166,6 +206,111 @@ export default function BusinessDetail() {
           </Link>
         )}
       </div>
+
+      {/* Claim Section */}
+      {!business.ownerId && (
+        <div className="card bg-indigo-50/20 border border-indigo-150 p-4 mt-4 space-y-2">
+          <h3 className="text-sm font-bold text-slate-800">Is this your business?</h3>
+          <p className="text-xs text-slate-600">
+            Submit a verification claim to manage hours, upload photos, reward customer reviews, and launch discount campaigns.
+          </p>
+          {showClaimForm ? (
+            <form onSubmit={handleClaimSubmit} className="space-y-3 pt-2 border-t border-indigo-100">
+              {claimError && <p className="text-xs font-semibold text-red-600">{claimError}</p>}
+              {claimSuccess ? (
+                <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded border border-emerald-200">
+                  🎉 Verification claim request submitted successfully! An administrator will review your contact information.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Contact Name</label>
+                      <input
+                        type="text"
+                        placeholder="Your full name"
+                        value={claimName}
+                        onChange={(e) => setClaimName(e.target.value)}
+                        className="w-full rounded border border-slate-200 p-2 text-xs focus:outline-none focus:border-primary bg-white"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          placeholder="Contact phone"
+                          value={claimPhone}
+                          onChange={(e) => setClaimPhone(e.target.value)}
+                          className="w-full rounded border border-slate-200 p-2 text-xs focus:outline-none focus:border-primary bg-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email</label>
+                        <input
+                          type="email"
+                          placeholder="Contact email"
+                          value={claimEmail}
+                          onChange={(e) => setClaimEmail(e.target.value)}
+                          className="w-full rounded border border-slate-200 p-2 text-xs focus:outline-none focus:border-primary bg-white"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Evidence / Proof Reference</label>
+                      <input
+                        type="text"
+                        placeholder="Link to website, registration document ID, etc."
+                        value={claimEvidence}
+                        onChange={(e) => setClaimEvidence(e.target.value)}
+                        className="w-full rounded border border-slate-200 p-2 text-xs focus:outline-none focus:border-primary bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Note to Admin</label>
+                      <textarea
+                        placeholder="Any additional details supporting your claim..."
+                        value={claimNote}
+                        onChange={(e) => setClaimNote(e.target.value)}
+                        className="w-full rounded border border-slate-200 p-2 text-xs focus:outline-none focus:border-primary bg-white"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={claimLoading} className="btn btn-sm bg-primary hover:bg-primary-dark text-white text-xs font-semibold py-1.5 px-3 rounded">
+                      {claimLoading ? 'Submitting...' : 'Submit Claim'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowClaimForm(false)}
+                      className="btn btn-sm bg-slate-250 hover:bg-slate-350 text-slate-700 text-xs font-semibold py-1.5 px-3 rounded"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+          ) : (
+            <button
+              onClick={() => {
+                if (!token) {
+                  alert('Please sign in to claim a business listing')
+                  return
+                }
+                setShowClaimForm(true)
+              }}
+              className="btn btn-sm bg-primary hover:bg-primary-dark text-white font-bold py-1.5 px-3 rounded text-xs"
+            >
+              🙋 Claim Business
+            </button>
+          )}
+        </div>
+      )}
 
       <section className="mt-6">
         <h2 className="text-base">Reviews</h2>

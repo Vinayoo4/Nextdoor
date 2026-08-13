@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import { AnalyticsEvent, type AnalyticsType } from '../models/AnalyticsEvent'
+import { analyticsRepository, AnalyticsType } from '../database/repositories/analyticsRepository'
 import { asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 
@@ -12,10 +12,10 @@ const analyticsSchema = z.object({
 
 export const logEvent = asyncHandler(async (req: Request, res: Response) => {
   const { type, listingId, meta } = parseBody(req, analyticsSchema)
-  await AnalyticsEvent.create({
+  analyticsRepository.create({
     type: type as AnalyticsType,
-    listingId: listingId || undefined,
-    userId: req.user?.id,
+    listing_id: listingId || undefined,
+    user_id: req.user?.id,
     meta,
   })
   res.status(201).json({ ok: true })

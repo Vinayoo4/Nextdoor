@@ -1,5 +1,21 @@
 import { BaseRepository, generateId, now, QueryOptions, PaginatedResult } from './base'
 
+export const BUSINESS_CATEGORIES = [
+  'Food',
+  'Healthcare',
+  'Govt',
+  'Banking',
+  'Education',
+  'Worship',
+  'Transport',
+  'Shopping',
+  'Services',
+  'Emergency',
+] as const
+
+export type BusinessCategory = typeof BUSINESS_CATEGORIES[number]
+
+
 export interface Business {
   id: string
   name: string
@@ -15,7 +31,7 @@ export interface Business {
   photos: string[]
   attributes: { parking: boolean; cards: boolean; homeDelivery: boolean }
   owner_id: string | null
-  verified: number
+  verified: boolean
   verified_at: Date | null
   plan: 'free' | 'promoted'
   rating_avg: number
@@ -71,6 +87,8 @@ export interface UpdateBusinessInput {
   location_lat?: number
   location_lng?: number
   locality_id?: string | null
+  rating_avg?: number
+  rating_count?: number
 }
 
 export class BusinessRepository extends BaseRepository {
@@ -164,7 +182,7 @@ export class BusinessRepository extends BaseRepository {
     
     this.executeRun(
       `INSERT INTO ${this.table} (id, name, slug, category, subcategory, tags, description, address, phone, whatsapp, hours, photos, attributes, owner_id, verified, verified_at, plan, rating_avg, rating_count, status, location_lat, location_lng, locality_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, input.name, input.slug, input.category, input.subcategory || null,
         JSON.stringify(input.tags || []), input.description || null, input.address, input.phone, input.whatsapp || null,
@@ -204,7 +222,9 @@ export class BusinessRepository extends BaseRepository {
       status: 'status',
       location_lat: 'location_lat',
       location_lng: 'location_lng',
-      locality_id: 'locality_id'
+      locality_id: 'locality_id',
+      rating_avg: 'rating_avg',
+      rating_count: 'rating_count'
     }
 
     for (const [key, column] of Object.entries(fieldMap)) {
@@ -258,7 +278,7 @@ export class BusinessRepository extends BaseRepository {
     return result.changes > 0
   }
 
-  private deserializeBusiness(row: Business): Business {
+  private deserializeBusiness(row: any): Business {
     const deserialized = this.deserializeDates(row)
     return {
       ...deserialized,

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import { Building, type BuildingType } from '../models/Building'
+import { buildingRepository, BuildingType } from '../database/repositories/buildingRepository'
 import { asyncHandler } from '../utils/errors'
 import { serializeBuilding } from '../utils/serializers'
 
@@ -19,7 +19,7 @@ const BUILDING_SECTIONS: { key: string; label: string; types: BuildingType[] }[]
 ]
 
 export const getGuide = asyncHandler(async (_req: Request, res: Response) => {
-  const all = await Building.find().sort({ name: 1 }).lean()
+  const all = buildingRepository.findGuide('jaipur') // default cityId
   const sections = BUILDING_SECTIONS.map((section) => ({
     key: section.key,
     label: section.label,
@@ -29,19 +29,8 @@ export const getGuide = asyncHandler(async (_req: Request, res: Response) => {
 })
 
 export const listBuildings = asyncHandler(async (req: Request, res: Response) => {
-  const { type, lat, lng, radius } = listBuildingsSchema.parse(req.query)
+  const { type } = listBuildingsSchema.parse(req.query)
 
-  const filter: Record<string, unknown> = {}
-  if (type) filter.type = type
-  if (lat !== undefined && lng !== undefined && radius !== undefined) {
-    filter.location = {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [lng, lat] },
-        $maxDistance: radius * 1000,
-      },
-    }
-  }
-
-  const buildings = await Building.find(filter).sort({ name: 1 }).limit(100).lean()
-  res.json({ buildings: buildings.map(serializeBuilding) })
+  const result = buildingRepository.findAll({ limit: 100 }, { type: type as BuildingType })
+  res.json({ buildings: result.items.map(serializeBuilding) })
 })

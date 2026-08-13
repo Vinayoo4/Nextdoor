@@ -1,4 +1,4 @@
-import { getDatabase } from './connection'
+import { getDatabase } from '../connection'
 import { randomUUID } from 'node:crypto'
 
 export interface QueryOptions {
@@ -67,7 +67,7 @@ export class BaseRepository {
     return row || null
   }
 
-  protected executeRun(query: string, params: unknown[] = []): Database.RunResult {
+  protected executeRun(query: string, params: unknown[] = []): any {
     const stmt = this.db.prepare(query)
     return stmt.run(...params)
   }
@@ -77,8 +77,8 @@ export class BaseRepository {
     return transaction()
   }
 
-  protected serializeDates(obj: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
+  protected serializeDates(obj: any): any {
+    const result: any = {}
     for (const [key, value] of Object.entries(obj)) {
       if (value instanceof Date) {
         result[key] = value.toISOString()
@@ -91,14 +91,14 @@ export class BaseRepository {
     return result
   }
 
-  protected deserializeDates<T extends Record<string, unknown>>(obj: T, dateFields: string[] = ['created_at', 'updated_at', 'deleted_at', 'expires_at', 'valid_from', 'valid_to', 'joined_at', 'reviewed_at', 'last_verified_at', 'published_at']): T {
-    const result = { ...obj }
+  protected deserializeDates<T>(obj: T, dateFields: string[] = ['created_at', 'updated_at', 'deleted_at', 'expires_at', 'valid_from', 'valid_to', 'joined_at', 'reviewed_at', 'last_verified_at', 'published_at']): T {
+    const result = { ...obj } as any
     for (const field of dateFields) {
       if (result[field] && typeof result[field] === 'string') {
         result[field] = new Date(result[field] as string)
       }
     }
-    return result
+    return result as T
   }
 
   protected parseJsonField<T>(value: unknown, defaultValue: T): T {

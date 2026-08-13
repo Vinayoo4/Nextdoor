@@ -22,6 +22,8 @@ import Offline from '@/pages/Offline'
 import OwnerDashboard from '@/pages/OwnerDashboard'
 import AuthorityPortal from '@/pages/AuthorityPortal'
 import NavigatePage from '@/pages/Navigate'
+import PasteDiscovery from '@/pages/PasteDiscovery'
+import PasteViewer from '@/pages/PasteViewer'
 import NotFound from '@/pages/NotFound'
 
 function ScrollToTop() {
@@ -85,6 +87,8 @@ export default function App() {
           <Route path="/circles/:id" element={<CircleDetail />} />
           <Route path="/emergency" element={<Emergency />} />
           <Route path="/navigate" element={<NavigatePage />} />
+          <Route path="/pastes" element={<PasteDiscovery />} />
+          <Route path="/pastes/:id" element={<PasteViewer />} />
         </Route>
 
         {/* Authenticated Routes under Layout */}

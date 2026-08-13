@@ -24,20 +24,27 @@ export class PasteCommentRepository extends BaseRepository {
     return row ? this.deserializeDates(row) : null
   }
 
-  findByPasteId(pasteId: string, options: QueryOptions = {}): PaginatedResult<PasteComment> {
-    const where = 'WHERE paste_id = ? AND deleted_at IS NULL'
-    const { query, params } = this.buildSelectQuery(this.table, options, where, [pasteId])
-    const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [pasteId])
+  findByPasteId(pasteId: string, options: QueryOptions = {}): PaginatedResult<PasteComment & { user_name: string }> {
+    const limit = options.limit || 50
+    const offset = options.offset || 0
+    const query = `
+      SELECT c.*, u.name as user_name FROM ${this.table} c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.paste_id = ? AND c.deleted_at IS NULL
+      ORDER BY c.created_at ASC
+      LIMIT ? OFFSET ?
+    `
+    const countQuery = `SELECT COUNT(*) as count FROM ${this.table} WHERE paste_id = ? AND deleted_at IS NULL`
     
-    const items = this.executeQuery<PasteComment>(query, params).map(r => this.deserializeDates(r))
-    const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
+    const items = this.executeQuery<PasteComment & { user_name: string }>(query, [pasteId, limit, offset]).map(r => this.deserializeDates(r))
+    const total = this.executeQueryOne<{ count: number }>(countQuery, [pasteId])?.count || 0
     
     return {
       items,
       total,
-      page: Math.floor((options.offset || 0) / (options.limit || 50)) + 1,
-      pageSize: options.limit || 50,
-      totalPages: Math.ceil(total / (options.limit || 50))
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit)
     }
   }
 

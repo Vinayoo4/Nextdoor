@@ -1,4 +1,4 @@
-import type { BusinessCategory } from '../../models/Business'
+import type { BusinessCategory } from '../../database/repositories/businessRepository'
 
 export interface SeedBusiness {
   name: string

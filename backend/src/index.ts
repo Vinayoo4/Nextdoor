@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
-import { connectDB } from './config/db'
+import { runMigrations } from './database/connection'
 import { env } from './config/env'
 import routes from './routes'
 import { errorHandler, notFoundHandler } from './utils/errors'
@@ -41,9 +41,10 @@ if (env.nodeEnv === 'production') {
   }
 }
 
-async function main() {
+function main() {
   try {
-    await connectDB()
+    runMigrations()
+    console.log('[db] SQLite database initialized and migrated')
     app.listen(env.port, () => {
       console.log(`[server] API ready at http://localhost:${env.port}`)
     })
@@ -56,7 +57,11 @@ async function main() {
 if (env.nodeEnv !== 'production' || process.env.VERCEL !== '1') {
   main()
 } else {
-  connectDB().catch(console.error)
+  try {
+    runMigrations()
+  } catch (err) {
+    console.error('[db] SQLite migration error on serverless:', err)
+  }
 }
 
 export default app

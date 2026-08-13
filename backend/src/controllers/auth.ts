@@ -1,13 +1,12 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import { User } from '../models/User'
-import { Otp } from '../models/Otp'
+import { userRepository } from '../database/repositories/userRepository'
+import { otpRepository } from '../database/repositories/otpRepository'
 import { hashPassword, verifyPassword } from '../utils/hash'
 import { signToken } from '../utils/jwt'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { serializeUser } from '../utils/serializers'
-import crypto from 'node:crypto'
 
 const requestOtpSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -29,11 +28,7 @@ export const requestOtp = asyncHandler(async (req: Request, res: Response) => {
   // Expire in 10 minutes
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
-  await Otp.findOneAndUpdate(
-    { email },
-    { email, codeHash, expiresAt, attempts: 0 },
-    { upsert: true, new: true }
-  )
+  otpRepository.create(email, codeHash, expiresAt)
 
   // In a real app we'd send an email here. For MVP, we return it in dev mode.
   res.json({ message: 'OTP sent successfully', devOtp })
@@ -42,36 +37,35 @@ export const requestOtp = asyncHandler(async (req: Request, res: Response) => {
 export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
   const { email, otp, name } = parseBody(req, verifyOtpSchema)
 
-  const otpRecord = await Otp.findOne({ email })
+  const otpRecord = otpRepository.findByEmail(email)
   if (!otpRecord) throw new ApiError(400, 'No OTP requested for this email')
 
-  if (otpRecord.expiresAt < new Date()) {
-    await Otp.deleteOne({ email })
+  if (new Date(otpRecord.expires_at) < new Date()) {
+    otpRepository.deleteByEmail(email)
     throw new ApiError(400, 'OTP expired')
   }
 
-  const ok = await verifyPassword(otp, otpRecord.codeHash)
+  const ok = await verifyPassword(otp, otpRecord.code_hash)
   if (!ok) {
-    otpRecord.attempts += 1
-    await otpRecord.save()
+    otpRepository.incrementAttempts(email)
     throw new ApiError(400, 'Invalid OTP')
   }
 
   // OTP is valid
-  await Otp.deleteOne({ email })
+  otpRepository.deleteByEmail(email)
 
-  let user = await User.findOne({ email })
+  let user = userRepository.findByEmail(email)
   if (!user) {
-    user = await User.create({ email, name: name || email.split('@')[0] })
+    user = userRepository.create({ email, name: name || email.split('@')[0], password_hash: '' })
   }
 
-  const token = signToken({ userId: String(user._id), email: user.email, role: user.role })
-  res.json({ token, user: serializeUser(user.toObject()) })
+  const token = signToken({ userId: user.id, email: user.email, role: user.role })
+  res.json({ token, user: serializeUser(user) })
 })
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw new ApiError(401, 'Not authenticated')
-  const user = await User.findById(req.user.id).select('-passwordHash').lean()
+  const user = userRepository.findById(req.user.id)
   if (!user) throw new ApiError(404, 'User not found')
   res.json({ user: serializeUser(user) })
 })

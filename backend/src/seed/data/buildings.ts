@@ -1,4 +1,4 @@
-import type { BuildingType } from '../../models/Building'
+import type { BuildingType } from '../../database/repositories/buildingRepository'
 
 export interface SeedBuilding {
   name: string

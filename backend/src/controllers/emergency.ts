@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import { Emergency } from '../models/Emergency'
-import { Building } from '../models/Building'
+import { emergencyRepository } from '../database/repositories/emergencyRepository'
+import { buildingRepository } from '../database/repositories/buildingRepository'
 import { env } from '../config/env'
 import { asyncHandler, ApiError } from '../utils/errors'
 import { haversineKm, type LatLng } from '../utils/geo'
@@ -25,18 +25,8 @@ export const getEmergency = asyncHandler(async (req: Request, res: Response) => 
 
   let nearby: ReturnType<typeof serializeEmergency>[] = []
   if (lat !== undefined && lng !== undefined) {
-    nearby = (
-      await Emergency.find({
-        location: {
-          $near: {
-            $geometry: { type: 'Point', coordinates: [lng, lat] },
-            $maxDistance: 15000,
-          },
-        },
-      })
-        .limit(5)
-        .lean()
-    ).map(serializeEmergency)
+    const list = emergencyRepository.findNearby(lat, lng, 15) // 15 km max radius
+    nearby = list.slice(0, 5).map(serializeEmergency)
   }
 
   res.json({ contacts: STATIC_CONTACTS, nearby })
@@ -126,26 +116,16 @@ export const nearestLandmark = asyncHandler(async (req: Request, res: Response) 
     .object({ lat: z.coerce.number(), lng: z.coerce.number() })
     .parse(req.query)
 
-  const landmarks = await Building.find({
-    location: {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [lng, lat] },
-        $maxDistance: 3000,
-      },
-    },
-  })
-    .limit(1)
-    .lean()
+  const result = buildingRepository.findNearest(lat, lng, 3) // 3 km max radius
 
-  if (!landmarks.length) {
-    return res.json({ landmark: null })
+  if (!result) {
+    return res.json({ landmark: null, distanceM: null })
   }
-  const coords = landmarks[0].location?.coordinates
-  const distanceM = coords
-    ? Math.round(haversineKm({ lat: coords[1], lng: coords[0] }, { lat, lng }) * 1000)
-    : null
 
-  res.json({ landmark: serializeBuilding(landmarks[0]), distanceM })
+  res.json({
+    landmark: serializeBuilding(result.building),
+    distanceM: result.distanceM
+  })
 })
 
 export { ApiError }

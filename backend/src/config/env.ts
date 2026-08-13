@@ -11,7 +11,7 @@ function required(name: string, fallback?: string): string {
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  mongoUri: required('MONGODB_URI'),
+  databasePath: process.env.DATABASE_PATH ?? './data/app.db',
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
   osmrBaseUrl: process.env.OSRM_BASE_URL ?? 'https://router.project-osrm.org',

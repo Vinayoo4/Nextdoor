@@ -1,22 +1,25 @@
 import 'dotenv/config'
-import { connectDB, disconnectDB } from '../config/db'
-import { User } from '../models/User'
-import { Post } from '../models/Post'
-import { Comment } from '../models/Comment'
-import { Business, slugify } from '../models/Business'
-import { Circle } from '../models/Circle'
-import { Channel } from '../models/Channel'
-import { Message } from '../models/Message'
-import { Building } from '../models/Building'
-import { Emergency } from '../models/Emergency'
-import { Review } from '../models/Review'
-import { Offer } from '../models/Offer'
-import { AnalyticsEvent } from '../models/AnalyticsEvent'
-import { Waitlist } from '../models/Waitlist'
+import { runMigrations, getDatabase, closeDatabase } from '../database/connection'
+import { userRepository } from '../database/repositories/userRepository'
+import { businessRepository } from '../database/repositories/businessRepository'
+import { postRepository } from '../database/repositories/postRepository'
+import { commentRepository } from '../database/repositories/commentRepository'
+import { buildingRepository } from '../database/repositories/buildingRepository'
+import { emergencyRepository } from '../database/repositories/emergencyRepository'
+import { circleRepository } from '../database/repositories/circleRepository'
+import { channelRepository } from '../database/repositories/channelRepository'
+import { messageRepository } from '../database/repositories/messageRepository'
+import { reviewRepository } from '../database/repositories/reviewRepository'
+import { offerRepository } from '../database/repositories/offerRepository'
+import { analyticsRepository } from '../database/repositories/analyticsRepository'
 import { hashPassword } from '../utils/hash'
 import { env } from '../config/env'
 import { BUSINESSES } from './data/businesses'
 import { BUILDINGS } from './data/buildings'
+
+function slugify(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+}
 
 const SEED_POSTS = [
   'Morning walk at Statue Circle — the flower beds are blooming beautifully today. 🌸',
@@ -32,82 +35,102 @@ const SEED_POSTS = [
 ]
 
 async function seed() {
-  console.log('Seeding database...')
+  console.log('Seeding SQLite database...')
+
+  runMigrations()
+  const db = getDatabase()
 
   // Reset
-  await Promise.all([
-    User.deleteMany({}),
-    Post.deleteMany({}),
-    Comment.deleteMany({}),
-    Business.deleteMany({}),
-    Circle.deleteMany({}),
-    Channel.deleteMany({}),
-    Message.deleteMany({}),
-    Building.deleteMany({}),
-    Emergency.deleteMany({}),
-    Review.deleteMany({}),
-    Offer.deleteMany({}),
-    AnalyticsEvent.deleteMany({}),
-    Waitlist.deleteMany({}),
-  ])
+  db.prepare('DELETE FROM otps').run()
+  db.prepare('DELETE FROM paste_comments').run()
+  db.prepare('DELETE FROM paste_reports').run()
+  db.prepare('DELETE FROM paste_views').run()
+  db.prepare('DELETE FROM pastes').run()
+  db.prepare('DELETE FROM analytics_events').run()
+  db.prepare('DELETE FROM waitlist').run()
+  db.prepare('DELETE FROM offers').run()
+  db.prepare('DELETE FROM reviews').run()
+  db.prepare('DELETE FROM emergencies').run()
+  db.prepare('DELETE FROM buildings').run()
+  db.prepare('DELETE FROM messages').run()
+  db.prepare('DELETE FROM channels').run()
+  db.prepare('DELETE FROM circle_members').run()
+  db.prepare('DELETE FROM circles').run()
+  db.prepare('DELETE FROM user_saved_places').run()
+  db.prepare('DELETE FROM post_upvotes').run()
+  db.prepare('DELETE FROM comments').run()
+  db.prepare('DELETE FROM posts').run()
+  db.prepare('DELETE FROM businesses').run()
+  db.prepare('DELETE FROM rewari_articles').run()
+  db.prepare('DELETE FROM article_revisions').run()
+  db.prepare('DELETE FROM users').run()
 
   // Users
+  const adminPassword = await hashPassword(env.seedAdminPassword)
+  const userPassword = await hashPassword('User@1234')
+  const ownerPassword = await hashPassword('Owner@1234')
 
-  const admin = await User.create({
+  const admin = userRepository.create({
     name: 'City Admin',
     email: 'admin@nextdoor.local',
     role: 'admin',
-    points: 100,
+    password_hash: adminPassword
   })
-  const owner = await User.create({
+  userRepository.addPoints(admin.id, 100)
+
+  const owner = userRepository.create({
     name: 'Ramesh Sharma',
     email: 'ramesh@nextdoor.local',
     role: 'owner',
-    points: 40,
+    password_hash: ownerPassword
   })
-  const regular = await User.create({
+  userRepository.addPoints(owner.id, 40)
+
+  const regular = userRepository.create({
     name: 'Priya Singh',
     email: 'priya@nextdoor.local',
     role: 'user',
-    points: 15,
+    password_hash: userPassword
   })
-  const rahul = await User.create({
+  userRepository.addPoints(regular.id, 15)
+
+  const rahul = userRepository.create({
     name: 'Rahul Verma',
     email: 'rahul@nextdoor.local',
     role: 'user',
-    points: 8,
+    password_hash: userPassword
   })
+  userRepository.addPoints(rahul.id, 8)
+
   const users = [admin, owner, regular, rahul]
   console.log(`  users: ${users.length}`)
 
   // Businesses
   const businessDocs = []
   for (const b of BUSINESSES) {
-    const doc = await Business.create({
+    const doc = businessRepository.create({
       name: b.name,
       slug: `${slugify(b.name)}-${Math.random().toString(36).slice(2, 6)}`,
-      category: b.category,
+      category: b.category as any,
       subcategory: b.subcategory,
       description: b.description,
       address: b.address,
       phone: b.phone,
       whatsapp: b.whatsapp,
       tags: b.tags,
-      location: { type: 'Point', coordinates: [b.lng, b.lat] },
       hours: b.hours,
       attributes: b.attributes,
-      ownerId: b.name === 'SALTEDHASH' ? owner._id : (Math.random() > 0.7 ? owner._id : undefined),
+      owner_id: b.name === 'SALTEDHASH' ? owner.id : (Math.random() > 0.7 ? owner.id : undefined),
       verified: b.verified,
-      plan: b.plan,
-      ratingAvg: 0,
-      ratingCount: 0,
-      status: 'active',
+      plan: b.plan as any,
+      location_lat: b.lat,
+      location_lng: b.lng,
     })
     businessDocs.push({ doc, seed: b })
   }
   console.log(`  businesses: ${businessDocs.length}`)
 
-  // Reviews (15 spread across first businesses)
+  // Reviews
   const reviewTexts = [
     'Great service and very helpful staff. Highly recommended!',
     'Decent place, prices are reasonable for the area.',
@@ -129,41 +152,33 @@ async function seed() {
   for (let i = 0; i < 15; i++) {
     const b = businessDocs[i % businessDocs.length]
     const rating = 3 + (i % 3)
-    const review = await Review.create({
-      businessId: b.doc._id,
-      userId: reviewUsers[i % reviewUsers.length]._id,
+    const review = reviewRepository.create({
+      business_id: b.doc.id,
+      user_id: reviewUsers[i % reviewUsers.length].id,
       rating,
       text: reviewTexts[i],
-      ownerReply: i % 3 === 0 ? 'Thank you for your feedback!' : undefined,
     })
-    void review
-  }
-
-  // Recompute ratings
-  const allBusinesses = await Business.find({})
-  for (const b of allBusinesses) {
-    const [agg] = await Review.aggregate<{ avg: number; count: number }>([
-      { $match: { businessId: b._id } },
-      { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } },
-    ])
-    if (agg) {
-      b.ratingAvg = Math.round(agg.avg * 10) / 10
-      b.ratingCount = agg.count
-      await b.save()
+    if (i % 3 === 0) {
+      db.prepare(`UPDATE reviews SET owner_reply = ? WHERE id = ?`).run('Thank you for your feedback!', review.id)
     }
   }
 
-  // Offers (12 active)
+  // Recalculate business ratings
+  for (const b of businessDocs) {
+    businessRepository.updateRating(b.doc.id)
+  }
+
+  // Offers
   const offered = businessDocs.filter((b) => b.seed.offer).slice(0, 12)
   for (const b of offered) {
     const offer = b.seed.offer!
-    await Offer.create({
-      businessId: b.doc._id,
+    offerRepository.create({
+      business_id: b.doc.id,
       title: offer.title,
       discount: offer.discount,
       code: offer.code,
-      validFrom: new Date(Date.now() - 7 * 86400000),
-      validTo: new Date(Date.now() + 45 * 86400000),
+      valid_from: new Date(Date.now() - 7 * 86400000),
+      valid_to: new Date(Date.now() + 45 * 86400000),
       status: 'active',
     })
   }
@@ -174,24 +189,22 @@ async function seed() {
   const postDocs = []
   for (let i = 0; i < SEED_POSTS.length; i++) {
     const author = posters[i % posters.length]
-    const post = await Post.create({
+    const post = postRepository.create({
       content: SEED_POSTS[i],
-      userId: author._id,
-      authorName: author.name,
-      location: {
-        type: 'Point',
-        coordinates: [76.6186 + (Math.random() - 0.5) * 0.05, 28.1928 + (Math.random() - 0.5) * 0.05],
-      },
+      user_id: author.id,
+      author_name: author.name,
+      location_lat: 28.1928 + (Math.random() - 0.5) * 0.05,
+      location_lng: 76.6186 + (Math.random() - 0.5) * 0.05,
     })
     postDocs.push(post)
   }
   console.log(`  posts: ${postDocs.length}`)
 
-  // Comments on some posts
+  // Comments
   for (let i = 0; i < 10; i++) {
     const post = postDocs[i % postDocs.length]
     const author = posters[(i + 1) % posters.length]
-    await Comment.create({
+    commentRepository.create({
       content: [
         'Totally agree!',
         'Thanks for sharing this.',
@@ -199,25 +212,26 @@ async function seed() {
         'This is really helpful for the community.',
         'Happened with me too last week.',
       ][i % 5],
-      postId: post._id,
-      userId: author._id,
-      authorName: author.name,
+      post_id: post.id,
+      user_id: author.id,
+      author_name: author.name,
     })
   }
 
   // Buildings
   for (const bld of BUILDINGS) {
-    await Building.create({
+    buildingRepository.create({
       name: bld.name,
-      type: bld.type,
+      type: bld.type as any,
       address: bld.address,
       timings: bld.timings,
       contact: bld.contact,
       services: bld.services,
       description: bld.description,
       photos: [],
-      cityId: 'jaipur',
-      location: { type: 'Point', coordinates: [bld.lng, bld.lat] },
+      city_id: 'jaipur',
+      location_lat: bld.lat,
+      location_lng: bld.lng,
     })
   }
   console.log(`  buildings: ${BUILDINGS.length}`)
@@ -234,12 +248,13 @@ async function seed() {
     { name: 'Women Helpline Cell', type: 'women', phone: '1091', lat: 26.9082, lng: 75.7982, address: 'Collectorate, MI Road, Rewari' },
   ]
   for (const e of emergencySeeds) {
-    await Emergency.create({
+    emergencyRepository.create({
       name: e.name,
-      type: e.type as 'police',
+      type: e.type as any,
       phone: e.phone,
       address: e.address,
-      location: { type: 'Point', coordinates: [e.lng, e.lat] },
+      location_lat: e.lat,
+      location_lng: e.lng,
       city: 'Rewari',
     })
   }
@@ -272,21 +287,24 @@ async function seed() {
     'Morning tea meetup at Tapri Central this Sunday, 8am!',
   ]
   for (const def of circleDefs) {
-    const circle = await Circle.create({
+    const circle = circleRepository.create({
       name: def.name,
       description: def.description,
-      creatorId: admin._id,
-      memberIds: [admin._id, owner._id, regular._id],
+      creator_id: admin.id,
     })
+    
+    circleRepository.addMember(circle.id, owner.id)
+    circleRepository.addMember(circle.id, regular.id)
+    
     for (const chName of def.channels) {
-      const channel = await Channel.create({ name: chName, circleId: circle._id })
+      const channel = channelRepository.create({ name: chName, circle_id: circle.id })
       for (let i = 0; i < 2; i++) {
         const author = posters[(i + circleDefs.indexOf(def)) % posters.length]
-        await Message.create({
+        messageRepository.create({
           content: channelMessageSeeds[(i + channelMessageSeeds.length - circleDefs.indexOf(def)) % channelMessageSeeds.length],
-          channelId: channel._id,
-          userId: author._id,
-          authorName: author.name,
+          channel_id: channel.id,
+          user_id: author.id,
+          author_name: author.name,
         })
       }
     }
@@ -294,9 +312,14 @@ async function seed() {
   console.log(`  circles: ${circleDefs.length}, channels: ${circleDefs.reduce((a, c) => a + c.channels.length, 0)}`)
 
   // Analytics sample
-  await AnalyticsEvent.create({ type: 'impression', listingId: businessDocs[0].doc._id, userId: regular._id, meta: { source: 'seed' } })
+  analyticsRepository.create({
+    type: 'impression',
+    listing_id: businessDocs[0].doc.id,
+    user_id: regular.id,
+    meta: { source: 'seed' }
+  })
 
-  await disconnectDB()
+  closeDatabase()
   console.log('\nSeed complete.')
   console.log('  Login as admin:')
   console.log(`    phone: ${env.seedAdminPhone}  password: ${env.seedAdminPassword}`)
@@ -306,9 +329,7 @@ async function seed() {
   console.log('    phone: 9888000022  password: User@1234')
 }
 
-connectDB()
-  .then(seed)
-  .catch((err) => {
-    console.error('Seed failed:', err)
-    process.exit(1)
-  })
+seed().catch((err) => {
+  console.error('Seed failed:', err)
+  process.exit(1)
+})

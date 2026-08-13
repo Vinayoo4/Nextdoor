@@ -1,9 +1,8 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
-import mongoose from 'mongoose'
-import { Post } from '../models/Post'
-import { Comment } from '../models/Comment'
-import { User } from '../models/User'
+import { postRepository } from '../database/repositories/postRepository'
+import { commentRepository } from '../database/repositories/commentRepository'
+import { userRepository } from '../database/repositories/userRepository'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { serializeComment, serializePost } from '../utils/serializers'
@@ -21,91 +20,83 @@ const createCommentSchema = z.object({
 
 const listPostsSchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().min(1).max(50).optional(),
+  limit: z.coerce.number().min(1).optional(),
   lat: z.coerce.number().optional(),
   lng: z.coerce.number().optional(),
   radius: z.coerce.number().positive().optional(),
 })
 
 export const listPosts = asyncHandler(async (req: Request, res: Response) => {
-  const { cursor, limit, lat, lng, radius } = listPostsSchema.parse(req.query)
+  const { limit, lat, lng, radius } = listPostsSchema.parse(req.query)
   const pageSize = Math.min(Math.max(limit ?? 20, 1), 50)
 
-  const filter: Record<string, unknown> = {}
+  let postsList: any[] = []
   if (lat !== undefined && lng !== undefined && radius !== undefined) {
-    filter.location = {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [lng, lat] },
-        $maxDistance: radius * 1000,
-      },
-    }
-  }
-  if (cursor && mongoose.isValidObjectId(cursor)) {
-    filter._id = { $lt: new mongoose.Types.ObjectId(cursor) }
+    const result = postRepository.findNearby(lat, lng, radius, { limit: pageSize })
+    postsList = result.items
+  } else {
+    const result = postRepository.findAll({ limit: pageSize })
+    postsList = result.items
   }
 
-  const docs = await Post.find(filter).sort({ _id: -1 }).limit(pageSize + 1).lean()
-  const hasMore = docs.length > pageSize
-  const items = docs.slice(0, pageSize)
-
-  res.json({ posts: items.map(serializePost), nextCursor: hasMore ? String(items[items.length - 1]._id) : null })
+  res.json({
+    posts: postsList.map(serializePost),
+    nextCursor: null // Keeping it for backward compatibility, though not used in UI
+  })
 })
 
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
   const { content, imageUrl, lat, lng } = parseBody(req, createPostSchema)
   const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? await User.findById(userId).lean() : null
+  const user = req.user ? userRepository.findById(userId) : null
 
-  const payload: Record<string, unknown> = {
+  const post = postRepository.create({
     content,
-    userId,
-    authorName: user?.name || 'Guest User',
-  }
-  if (imageUrl) payload.imageUrl = imageUrl
-  if (lat !== undefined && lng !== undefined) {
-    payload.location = { type: 'Point', coordinates: [lng, lat] }
-  }
+    user_id: userId,
+    author_name: user?.name || 'Guest User',
+    image_url: imageUrl || undefined,
+    location_lat: lat,
+    location_lng: lng,
+  })
 
-  const post = await Post.create(payload)
-
-  res.status(201).json({ post: serializePost(post.toObject()) })
+  res.status(201).json({ post: serializePost(post) })
 })
 
 export const getPost = asyncHandler(async (req: Request, res: Response) => {
-  const post = await Post.findById(req.params.id).lean()
+  const post = postRepository.findById(req.params.id)
   if (!post) throw new ApiError(404, 'Post not found')
   res.json({ post: serializePost(post) })
 })
 
 export const deletePost = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw new ApiError(401, 'Not authenticated')
-  const post = await Post.findById(req.params.id)
+  const post = postRepository.findById(req.params.id)
   if (!post) throw new ApiError(404, 'Post not found')
-  if (String(post.userId) !== req.user.id && req.user.role !== 'admin') {
+  if (post.user_id !== req.user.id && req.user.role !== 'admin') {
     throw new ApiError(403, 'You can only delete your own posts')
   }
-  await Promise.all([post.deleteOne(), Comment.deleteMany({ postId: post._id })])
+  postRepository.softDelete(req.params.id)
   res.json({ ok: true })
 })
 
 export const listComments = asyncHandler(async (req: Request, res: Response) => {
-  const comments = await Comment.find({ postId: req.params.id }).sort({ createdAt: 1 }).limit(100).lean()
-  res.json({ comments: comments.map(serializeComment) })
+  const result = commentRepository.findByPostId(req.params.id, { limit: 100 })
+  res.json({ comments: result.items.map(serializeComment) })
 })
 
 export const addComment = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.id || '000000000000000000000000'
   const { content } = parseBody(req, createCommentSchema)
-  const post = await Post.findById(req.params.id)
+  const post = postRepository.findById(req.params.id)
   if (!post) throw new ApiError(404, 'Post not found')
 
-  const user = req.user ? await User.findById(userId).lean() : null
+  const user = req.user ? userRepository.findById(userId) : null
 
-  const comment = await Comment.create({
+  const comment = commentRepository.create({
     content,
-    postId: post._id,
-    userId,
-    authorName: user?.name || 'Guest User',
+    post_id: post.id,
+    user_id: userId,
+    author_name: user?.name || 'Guest User',
   })
-  res.status(201).json({ comment: serializeComment(comment.toObject()) })
+  res.status(201).json({ comment: serializeComment(comment) })
 })

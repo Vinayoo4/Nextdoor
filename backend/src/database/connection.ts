@@ -45,6 +45,12 @@ export function runMigrations(): void {
   for (const statement of schema) {
     database.exec(statement)
   }
+
+  // Ensure Guest User exists to satisfy foreign key constraints for unauthenticated clients
+  database.prepare(`
+    INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+    VALUES ('000000000000000000000000', 'guest@nextdoor.local', 'Guest User', 'guest_placeholder', 'user', 0, datetime('now'), datetime('now'))
+  `).run()
 }
 
 function getSchema(): string[] {
@@ -334,6 +340,14 @@ function getSchema(): string[] {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
 
+    `CREATE TABLE IF NOT EXISTS user_saved_places (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, business_id)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS rewari_articles (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
@@ -403,6 +417,8 @@ function getSchema(): string[] {
     `CREATE INDEX IF NOT EXISTS idx_rewari_articles_category ON rewari_articles(category)`,
     `CREATE INDEX IF NOT EXISTS idx_rewari_articles_status ON rewari_articles(status)`,
     `CREATE INDEX IF NOT EXISTS idx_rewari_articles_author ON rewari_articles(author_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_article_revisions_article ON article_revisions(article_id)`
+    `CREATE INDEX IF NOT EXISTS idx_article_revisions_article ON article_revisions(article_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_saved_places_user ON user_saved_places(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_saved_places_business ON user_saved_places(business_id)`
   ]
 }
