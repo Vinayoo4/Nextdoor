@@ -4,6 +4,7 @@ import { transientStore } from '../utils/transientStore'
 import { userRepository } from '../database/repositories/userRepository'
 import { asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
+import { requireUserId } from '../middleware/auth'
 
 const heartbeatSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -18,8 +19,8 @@ const syncSchema = z.object({
 })
 
 export const heartbeat = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? userRepository.findById(userId) : null
+  const userId = requireUserId(req)
+  const user = userRepository.findById(userId)
   const { lat, lng } = parseBody(req, heartbeatSchema)
 
   // Update peer location in memory
@@ -33,6 +34,7 @@ export const heartbeat = asyncHandler(async (req: Request, res: Response) => {
 
 export const syncPeers = asyncHandler(async (req: Request, res: Response) => {
   const { lat, lng, localPosts, localMessages } = parseBody(req, syncSchema)
+  const userId = requireUserId(req)
 
   // 1. Merge incoming posts and messages into transientStore
   for (const post of localPosts) {
@@ -42,8 +44,8 @@ export const syncPeers = asyncHandler(async (req: Request, res: Response) => {
       if (!exists) {
         transientStore.addPost({
           id: post.id,
-          user_id: post.userId || post.user_id || '000000000000000000000000',
-          author_name: post.authorName || post.author_name || 'Guest User',
+          user_id: post.userId || post.user_id || userId,
+          author_name: post.authorName || post.author_name || 'Neighbor',
           content: post.content,
           image_url: post.imageUrl || post.image_url || null,
           location_lat: post.locationLat || post.location_lat || lat,
@@ -60,8 +62,8 @@ export const syncPeers = asyncHandler(async (req: Request, res: Response) => {
         transientStore.addMessage({
           id: msg.id,
           channel_id: msg.channelId,
-          user_id: msg.userId || msg.user_id || '000000000000000000000000',
-          author_name: msg.authorName || msg.author_name || 'Guest User',
+          user_id: msg.userId || msg.user_id || userId,
+          author_name: msg.authorName || msg.author_name || 'Neighbor',
           content: msg.content,
           type: msg.type || 'text',
           paste_id: msg.pasteId || msg.paste_id || null,

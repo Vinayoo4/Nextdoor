@@ -21,7 +21,7 @@ export default function CircleCreate() {
         name: name.trim(),
         description: description.trim(),
         initialChannel: initialChannel.trim() || undefined,
-        pin: pin.trim() || undefined
+        pin: pin.trim()
       })
       // Auto unlock locally for the creator
       await localDb.unlockCircle(res.circle.id)
@@ -72,16 +72,17 @@ export default function CircleCreate() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-slate-600">Circle Security PIN (Optional)</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-600">Circle Security PIN *</label>
             <input
               className="input"
+              required
               maxLength={20}
               type="text"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               placeholder="Set a PIN code to lock this circle"
             />
-            <p className="mt-1 text-[10px] text-slate-400">If set, users will need to enter this PIN (or request access from co-admins) to enter.</p>
+            <p className="mt-1 text-[10px] text-slate-400">Every circle is PIN-protected. Users enter this PIN (or request access from co-admins) to join.</p>
           </div>
         </div>
 

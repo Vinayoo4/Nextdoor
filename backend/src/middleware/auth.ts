@@ -48,6 +48,13 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
   next()
 }
 
+export function requireUserId(req: Request): string {
+  if (!req.user?.id) {
+    throw new ApiError(401, 'Authentication required')
+  }
+  return req.user.id
+}
+
 export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {

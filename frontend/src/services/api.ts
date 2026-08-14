@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/auth'
 import { cacheGet, cacheSet, cacheKey } from './offlineCache'
-import type { AuthResponse, BusinessListResponse, CircleListResponse } from '@/types'
+import type { BusinessListResponse, CircleListResponse } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -78,11 +78,7 @@ export const api = {
 }
 
 export const authApi = {
-  register: (data: { name: string; phone: string; password: string }) =>
-    api.post<AuthResponse>('/api/auth/register', data, { auth: false }),
-  login: (data: { phone: string; password: string }) =>
-    api.post<AuthResponse>('/api/auth/login', data, { auth: false }),
-  me: () => api.get<AuthResponse>('/api/auth/me'),
+  me: () => api.get<{ user: import('@/types').User }>('/api/auth/me'),
 }
 
 export const businessesApi = {
@@ -102,7 +98,7 @@ export const businessesApi = {
   create: (data: Record<string, unknown>) => api.post<{ business: import('@/types').Business }>('/api/businesses', data),
   toggleSave: (id: string) => api.post<{ saved: boolean; points: number }>(`/api/businesses/${id}/save`),
   addReview: (id: string, data: { rating: number; text: string }) =>
-    api.post<{ review: import('@/types').Review }>(`/api/businesses/${id}/reviews`, data, { auth: false }),
+    api.post<{ review: import('@/types').Review }>(`/api/businesses/${id}/reviews`, data),
   claim: (id: string, data: {
     contactName: string
     contactPhone: string
@@ -117,16 +113,17 @@ export const postsApi = {
     const qs = new URLSearchParams(params).toString()
     return api.get<{ posts: import('@/types').Post[] }>(`/api/posts${qs ? `?${qs}` : ''}`, { useCache: true })
   },
-  create: (content: string) => api.post<{ post: import('@/types').Post }>('/api/posts', { content }, { auth: false }),
+  create: (content: string, lat?: number, lng?: number) =>
+    api.post<{ post: import('@/types').Post }>('/api/posts', { content, lat, lng }),
 }
 
 export const circlesApi = {
   list: () => api.get<CircleListResponse>('/api/circles', { useCache: true }),
   create: (data: { name: string; description: string; initialChannel?: string; pin?: string }) =>
-    api.post<{ circle: import('@/types').Circle }>('/api/circles', data, { auth: false }),
+    api.post<{ circle: import('@/types').Circle }>('/api/circles', data),
   channels: (circleId: string) => api.get<{ channels: import('@/types').Channel[] }>(`/api/circles/${circleId}/channels`),
   createChannel: (circleId: string, name: string, pin?: string) =>
-    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name, pin }, { auth: false }),
+    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name, pin }),
   verifyPin: (circleId: string, pin: string) =>
     api.post<{ ok: boolean; role: string }>(`/api/circles/${circleId}/verify-pin`, { pin }),
   requestAccess: (circleId: string) =>
@@ -154,7 +151,7 @@ export const circlesApi = {
 export const messagesApi = {
   list: (channelId: string) => api.get<{ messages: import('@/types').Message[] }>(`/api/channels/${channelId}/messages`),
   send: (channelId: string, content: string, expiresIn?: 'none' | '10m' | '1h' | '1d' | '1w') =>
-    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content, expiresIn }, { auth: false }),
+    api.post<{ message: import('@/types').Message }>(`/api/channels/${channelId}/messages`, { content, expiresIn }),
 }
 
 export const emergencyApi = {

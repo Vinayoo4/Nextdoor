@@ -7,6 +7,8 @@ import { signToken } from '../utils/jwt'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { serializeUser } from '../utils/serializers'
+import { sendEmail } from '../utils/email'
+import { env } from '../config/env'
 
 const requestOtpSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -18,20 +20,47 @@ const verifyOtpSchema = z.object({
   name: z.string().optional(),
 })
 
+// Simple in-memory cooldown: at most 1 OTP request per email every 60 seconds.
+const lastSentAt = new Map<string, number>()
+
+function cooldownRemaining(email: string): number {
+  const last = lastSentAt.get(email.toLowerCase())
+  if (!last) return 0
+  const remaining = Math.ceil((last + 60_000 - Date.now()) / 1000)
+  return Math.max(remaining, 0)
+}
+
 export const requestOtp = asyncHandler(async (req: Request, res: Response) => {
   const { email } = parseBody(req, requestOtpSchema)
 
+  const wait = cooldownRemaining(email)
+  if (wait > 0) {
+    throw new ApiError(429, `Please wait ${wait} seconds before requesting another OTP`)
+  }
+
   // Generate 6 digit OTP
-  const devOtp = Math.floor(100000 + Math.random() * 900000).toString()
-  const codeHash = await hashPassword(devOtp)
+  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  const codeHash = await hashPassword(code)
 
   // Expire in 10 minutes
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
 
   otpRepository.create(email, codeHash, expiresAt)
+  lastSentAt.set(email.toLowerCase(), Date.now())
 
-  // In a real app we'd send an email here. For MVP, we return it in dev mode.
-  res.json({ message: 'OTP sent successfully', devOtp })
+  await sendEmail({
+    to: email,
+    subject: 'Your Nextdoor Rewari OTP',
+    text: `Your OTP is ${code}. It is valid for 10 minutes. If you did not request this, you can safely ignore this email.`,
+    html: `<p>Your One-Time Password (OTP) is <strong>${code}</strong>.</p><p>It is valid for 10 minutes.</p><p>If you did not request this, you can safely ignore this email.</p>`,
+  })
+
+  // Never expose the OTP in production.
+  if (env.isProduction) {
+    res.json({ message: 'OTP sent successfully' })
+  } else {
+    res.json({ message: 'OTP sent successfully', devOtp: code })
+  }
 })
 
 export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
@@ -47,7 +76,11 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
 
   const ok = await verifyPassword(otp, otpRecord.code_hash)
   if (!ok) {
-    otpRepository.incrementAttempts(email)
+    const attempts = otpRepository.incrementAttempts(email)
+    if (attempts >= 5) {
+      otpRepository.deleteByEmail(email)
+      throw new ApiError(400, 'Too many incorrect attempts. Please request a new OTP.')
+    }
     throw new ApiError(400, 'Invalid OTP')
   }
 

@@ -6,6 +6,7 @@ import { userRepository } from '../database/repositories/userRepository'
 import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
+import { requireUserId } from '../middleware/auth'
 import { serializeChannel } from '../utils/serializers'
 import { generateId } from '../database/repositories/base'
 
@@ -13,12 +14,12 @@ const createCircleSchema = z.object({
   name: z.string().min(1, 'Circle name is required').max(60),
   description: z.string().max(300).optional().or(z.literal('')),
   initialChannel: z.string().min(1).max(60).optional().or(z.literal('')),
-  pin: z.string().max(20).optional().or(z.literal('')),
+  pin: z.string().min(1, 'A security PIN is required to protect this circle').max(20),
 })
 
 const createChannelSchema = z.object({
   name: z.string().min(1, 'Channel name is required').max(60),
-  pin: z.string().max(20).optional().or(z.literal('')),
+  pin: z.string().min(1, 'A channel PIN is required').max(20),
 })
 
 const createMessageSchema = z.object({
@@ -50,14 +51,14 @@ export const listCircles = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const createCircle = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { name, description, initialChannel, pin } = parseBody(req, createCircleSchema)
 
   const circle = circleRepository.create({
     name,
     description: description ?? '',
     creator_id: userId,
-    pin: pin || undefined
+    pin,
   })
 
   let channel = null
@@ -85,7 +86,7 @@ export const createCircle = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const verifyCirclePin = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { pin } = parseBody(req, z.object({ pin: z.string() }))
   
   const circle = circleRepository.findById(req.params.id)
@@ -101,7 +102,7 @@ export const verifyCirclePin = asyncHandler(async (req: Request, res: Response) 
 })
 
 export const requestCircleAccess = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
@@ -110,7 +111,7 @@ export const requestCircleAccess = asyncHandler(async (req: Request, res: Respon
 })
 
 export const listCircleRequests = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
@@ -124,7 +125,7 @@ export const listCircleRequests = asyncHandler(async (req: Request, res: Respons
 })
 
 export const resolveCircleRequest = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { id: circleId, requestId } = req.params
   const { status } = parseBody(req, z.object({ status: z.enum(['approved', 'rejected']) }))
 
@@ -149,7 +150,7 @@ export const resolveCircleRequest = asyncHandler(async (req: Request, res: Respo
 })
 
 export const updateMemberRole = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { id: circleId, userId: targetUserId } = req.params
   const { role } = parseBody(req, z.object({ role: z.enum(['member', 'elder', 'co_admin', 'admin']) }))
 
@@ -194,7 +195,7 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
 })
 
 export const updateCirclePin = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { pin } = parseBody(req, z.object({ pin: z.string().max(20).optional().or(z.literal('')) }))
 
   const circle = circleRepository.findById(req.params.id)
@@ -210,7 +211,7 @@ export const updateCirclePin = asyncHandler(async (req: Request, res: Response) 
 })
 
 export const updateCircle = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { name, description } = parseBody(req, z.object({
     name: z.string().min(1).max(60),
     description: z.string().max(300).optional().or(z.literal(''))
@@ -232,7 +233,7 @@ export const updateCircle = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const getCircle = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
@@ -252,7 +253,7 @@ export const getCircle = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const listChannels = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const circleId = req.params.id
   
   const circle = circleRepository.findById(circleId)
@@ -268,7 +269,7 @@ export const listChannels = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const createChannel = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { name, pin } = parseBody(req, createChannelSchema)
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
@@ -278,12 +279,12 @@ export const createChannel = asyncHandler(async (req: Request, res: Response) =>
     throw new ApiError(403, 'Only Admin and Co-admins can create channels')
   }
 
-  const channel = channelRepository.create({ name, circle_id: circle.id, pin: pin || undefined })
+  const channel = channelRepository.create({ name, circle_id: circle.id, pin })
   res.status(201).json({ channel: { ...serializeChannel(channel), hasPin: !!channel.pin } })
 })
 
 export const verifyChannelPin = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { pin } = parseBody(req, z.object({ pin: z.string() }))
   
   const channel = channelRepository.findById(req.params.id)
@@ -297,7 +298,7 @@ export const verifyChannelPin = asyncHandler(async (req: Request, res: Response)
 })
 
 export const updateChannelPin = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { pin } = parseBody(req, z.object({ pin: z.string().max(20).optional().or(z.literal('')) }))
 
   const channel = channelRepository.findById(req.params.id)
@@ -313,7 +314,7 @@ export const updateChannelPin = asyncHandler(async (req: Request, res: Response)
 })
 
 export const listMessages = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
@@ -346,7 +347,7 @@ function calculateExpiresAt(expiresIn?: string): Date | null {
 }
 
 export const createMessage = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { content, expiresIn } = parseBody(req, createMessageSchema)
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
@@ -356,7 +357,7 @@ export const createMessage = asyncHandler(async (req: Request, res: Response) =>
     throw new ApiError(403, 'You must join this circle first')
   }
 
-  const user = req.user ? userRepository.findById(userId) : null
+  const user = userRepository.findById(userId)
   const expiresAt = calculateExpiresAt(expiresIn)
 
   const message = transientStore.addMessage({
@@ -364,7 +365,7 @@ export const createMessage = asyncHandler(async (req: Request, res: Response) =>
     content,
     channel_id: channel.id,
     user_id: userId,
-    author_name: user?.name || 'Guest User',
+    author_name: user?.name || 'Neighbor',
     type: 'text',
     paste_id: null,
     expires_at: expiresAt ? expiresAt.toISOString() : null

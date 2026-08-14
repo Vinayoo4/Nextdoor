@@ -10,7 +10,7 @@ router.get('/saved', requireAuth, businessController.listSaved)
 router.get('/:slug', businessController.getBusinessBySlug)
 router.patch('/:id', requireAuth, businessController.updateBusiness)
 router.post('/:id/claim', requireAuth, businessController.claimBusiness)
-router.post('/:id/reviews', businessController.addReview) // Open for public testing
+router.post('/:id/reviews', requireAuth, businessController.addReview)
 router.post('/:id/save', requireAuth, businessController.toggleSave)
 
 export default router

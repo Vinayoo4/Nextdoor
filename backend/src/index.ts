@@ -3,14 +3,11 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import { runMigrations } from './database/connection'
 import { env } from './config/env'
 import routes from './routes'
 import { errorHandler, notFoundHandler } from './utils/errors'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 

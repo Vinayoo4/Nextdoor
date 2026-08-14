@@ -6,7 +6,7 @@ const router = Router()
 
 // Circle Core
 router.get('/', circleController.listCircles)
-router.post('/', circleController.createCircle)
+router.post('/', requireAuth, circleController.createCircle)
 router.get('/:id', requireAuth, circleController.getCircle)
 
 // Access Control & Roles
@@ -20,8 +20,8 @@ router.put('/:id/pin', requireAuth, circleController.updateCirclePin)
 router.put('/:id', requireAuth, circleController.updateCircle)
 
 // Channel Management
-router.get('/:id/channels', circleController.listChannels)
-router.post('/:id/channels', circleController.createChannel)
+router.get('/:id/channels', requireAuth, circleController.listChannels)
+router.post('/:id/channels', requireAuth, circleController.createChannel)
 router.post('/channels/:id/verify-pin', requireAuth, circleController.verifyChannelPin)
 router.put('/channels/:id/pin', requireAuth, circleController.updateChannelPin)
 

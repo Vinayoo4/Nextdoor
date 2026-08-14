@@ -8,6 +8,7 @@ import { userRepository } from '../database/repositories/userRepository'
 import { userSavedPlacesRepository } from '../database/repositories/userSavedPlacesRepository'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
+import { requireUserId } from '../middleware/auth'
 import {
   serializeBusiness,
   serializeOffer,
@@ -103,7 +104,7 @@ export const listBusinesses = asyncHandler(async (req: Request, res: Response) =
 })
 
 export const createBusiness = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const data = parseBody(req, createBusinessSchema)
   const baseSlug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
   const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`
@@ -148,7 +149,7 @@ export const getBusinessBySlug = asyncHandler(async (req: Request, res: Response
 })
 
 export const updateBusiness = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
   
@@ -187,7 +188,7 @@ export const updateBusiness = asyncHandler(async (req: Request, res: Response) =
 })
 
 export const claimBusiness = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
   if (business.owner_id) throw new ApiError(409, 'This business is already claimed')
@@ -223,12 +224,12 @@ export const claimBusiness = asyncHandler(async (req: Request, res: Response) =>
 })
 
 export const addReview = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { rating, text } = parseBody(req, reviewSchema)
   const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
 
-  const existing = req.user ? reviewRepository.findByUserAndBusiness(userId, business.id) : null
+  const existing = reviewRepository.findByUserAndBusiness(userId, business.id)
   if (existing) throw new ApiError(409, 'You have already reviewed this business')
 
   reviewRepository.create({
@@ -241,7 +242,7 @@ export const addReview = asyncHandler(async (req: Request, res: Response) => {
   // Recalculate average rating
   const updatedBusiness = businessRepository.updateRating(business.id)!
 
-  const user = req.user ? userRepository.findById(userId) : null
+  const user = userRepository.findById(userId)
   if (user) {
     userRepository.addPoints(userId, 5)
   }
@@ -250,11 +251,11 @@ export const addReview = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const toggleSave = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const business = businessRepository.findById(req.params.id)
   if (!business) throw new ApiError(404, 'Business not found')
 
-  const user = req.user ? userRepository.findById(userId) : null
+  const user = userRepository.findById(userId)
   if (!user) return res.json({ saved: false, points: 0 })
 
   const wasSaved = userSavedPlacesRepository.isSaved(userId, business.id)
@@ -273,8 +274,8 @@ export const toggleSave = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const listSaved = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? userRepository.findById(userId) : null
+  const userId = requireUserId(req)
+  const user = userRepository.findById(userId)
   if (!user) return res.json({ businesses: [] })
 
   const savedIds = userSavedPlacesRepository.getSavedBusinesses(userId)
@@ -283,14 +284,14 @@ export const listSaved = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? userRepository.findById(userId) : null
+  const userId = requireUserId(req)
+  const user = userRepository.findById(userId)
   if (!user) throw new ApiError(404, 'User not found')
   res.json({ user: serializeUser(user) })
 })
 
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { name, email } = parseBody(
     req,
     z.object({
@@ -298,7 +299,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
       email: z.string().email().optional().or(z.literal('')),
     })
   )
-  const user = req.user ? userRepository.findById(userId) : null
+  const user = userRepository.findById(userId)
   if (!user) throw new ApiError(404, 'User not found')
 
   const updated = userRepository.update(userId, {

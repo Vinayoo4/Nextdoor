@@ -255,9 +255,9 @@ export default function CircleDetail() {
   // Add Channel
   async function addChannel(e: React.FormEvent) {
     e.preventDefault()
-    if (!id || !newChannel.trim()) return
+    if (!id || !newChannel.trim() || !newChannelPin.trim()) return
     try {
-      const res = await circlesApi.createChannel(id, newChannel.trim(), newChannelPin.trim() || undefined)
+      const res = await circlesApi.createChannel(id, newChannel.trim(), newChannelPin.trim())
       setChannels((c) => [...c, res.channel])
       setNewChannel('')
       setNewChannelPin('')
@@ -535,11 +535,12 @@ export default function CircleDetail() {
               required
             />
             <input
-              className="input !w-16 !px-1.5 !py-0.5 !text-[11px]"
-              placeholder="PIN (opt)"
+              className="input !w-20 !px-1.5 !py-0.5 !text-[11px]"
+              placeholder="PIN *"
               value={newChannelPin}
               onChange={(e) => setNewChannelPin(e.target.value)}
               maxLength={20}
+              required
             />
             <button type="submit" className="btn-primary !py-0.5 !px-2 !text-[10px]">Add</button>
           </form>

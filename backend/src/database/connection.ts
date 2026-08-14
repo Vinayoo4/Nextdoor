@@ -1,10 +1,7 @@
 import Database from 'better-sqlite3'
 import { mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { env } from '../config/env'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
 
 let db: Database.Database | null = null
 

@@ -6,6 +6,7 @@ import { userRepository } from '../database/repositories/userRepository'
 import { getDatabase } from '../database/connection'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
+import { requireUserId } from '../middleware/auth'
 
 const reviewClaimSchema = z.object({
   status: z.enum(['approved', 'rejected']),
@@ -35,7 +36,7 @@ export const listClaimRequests = asyncHandler(async (req: Request, res: Response
 export const reviewClaim = asyncHandler(async (req: Request, res: Response) => {
   const { status, adminNote } = parseBody(req, reviewClaimSchema)
   const claimId = req.params.id
-  const adminId = req.user?.id || '000000000000000000000000'
+  const adminId = requireUserId(req)
 
   const claim = businessClaimRepository.findById(claimId)
   if (!claim) throw new ApiError(404, 'Claim request not found')

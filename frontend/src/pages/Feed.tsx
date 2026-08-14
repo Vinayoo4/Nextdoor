@@ -114,7 +114,7 @@ export default function Feed() {
 
       // Push transiently to server
       if (token) {
-        await postsApi.create(content.trim())
+        await postsApi.create(content.trim(), coords.lat, coords.lng)
       }
       setContent('')
       loadFeed()

@@ -5,6 +5,7 @@ import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { generateId } from '../database/repositories/base'
+import { requireUserId } from '../middleware/auth'
 
 const createPostSchema = z.object({
   content: z.string().min(1, 'Post content is required').max(500, 'Post must be under 500 characters'),
@@ -39,15 +40,15 @@ export const listPosts = asyncHandler(async (req: Request, res: Response) => {
 
 export const createPost = asyncHandler(async (req: Request, res: Response) => {
   const { content, imageUrl, lat, lng } = parseBody(req, createPostSchema)
-  const userId = req.user?.id || '000000000000000000000000'
-  const user = req.user ? userRepository.findById(userId) : null
+  const userId = requireUserId(req)
+  const user = userRepository.findById(userId)
 
   // Save to transientStore in-memory cache
   const post = transientStore.addPost({
     id: generateId(),
     content,
     user_id: userId,
-    author_name: user?.name || 'Guest User',
+    author_name: user?.name || 'Neighbor',
     image_url: imageUrl || null,
     location_lat: lat || null,
     location_lng: lng || null,
@@ -74,21 +75,21 @@ export const listComments = asyncHandler(async (req: Request, res: Response) => 
 })
 
 export const addComment = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.id || '000000000000000000000000'
+  const userId = requireUserId(req)
   const { content } = parseBody(req, createCommentSchema)
 
   const posts = transientStore.getPosts()
   const post = posts.find((p) => p.id === req.params.id)
   if (!post) throw new ApiError(404, 'Post not found')
 
-  const user = req.user ? userRepository.findById(userId) : null
+  const user = userRepository.findById(userId)
 
   const comment = transientStore.addComment(post.id, {
     id: generateId(),
     content,
     post_id: post.id,
     user_id: userId,
-    author_name: user?.name || 'Guest User',
+    author_name: user?.name || 'Neighbor',
   })
 
   res.status(201).json({ comment })

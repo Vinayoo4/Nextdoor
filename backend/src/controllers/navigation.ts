@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
 import { ApiError, asyncHandler } from '../utils/errors'
+import { env } from '../config/env'
 
 const routeSchema = z.object({
   fromLat: z.coerce.number().min(-90).max(90),
@@ -28,7 +29,7 @@ export const getRoute = asyncHandler(async (req: Request, res: Response) => {
 
   try {
     const response = await fetch(
-      `http://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`
+      `${env.osmrBaseUrl}/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`
     )
     if (!response.ok) {
       throw new Error(`OSRM API error: ${response.status}`)

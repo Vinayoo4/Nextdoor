@@ -55,7 +55,7 @@ const TRANSIT_PLACES = [
     type: 'Railway Station',
     location: { lat: 28.1983, lng: 76.6190 },
     platforms: 8,
-    details: 'Major junction connecting Rewari to Delhi, Jaipur, Alwar, Rohtak, and Hisar. A historical junction established in 1873.',
+    details: 'Major junction connecting Rewari to Delhi, Alwar, Rohtak, Bikaner, and Ringus. A historical junction established in 1873.',
     popup: `<div class="p-2"><strong>Rewari Junction Railway Station</strong><br/><p class="text-xs mt-0.5">Main trains board point.</p></div>`
   },
   {

@@ -19,8 +19,8 @@ export default function Register() {
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ message: string; devOtp: string }>('/api/auth/otp/request', { email })
-      setDevOtp(res.devOtp)
+      const res = await api.post<{ message: string; devOtp?: string }>('/api/auth/otp/request', { email })
+      setDevOtp(res.devOtp ?? '')
       setStep('otp')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request OTP')
