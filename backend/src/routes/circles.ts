@@ -4,9 +4,25 @@ import { requireAuth } from '../middleware/auth'
 
 const router = Router()
 
+// Circle Core
 router.get('/', circleController.listCircles)
 router.post('/', circleController.createCircle)
+router.get('/:id', requireAuth, circleController.getCircle)
+
+// Access Control & Roles
+router.post('/:id/verify-pin', requireAuth, circleController.verifyCirclePin)
+router.post('/:id/request-access', requireAuth, circleController.requestCircleAccess)
+router.get('/:id/requests', requireAuth, circleController.listCircleRequests)
+router.post('/:id/requests/:requestId/resolve', requireAuth, circleController.resolveCircleRequest)
+router.post('/:id/members/:userId/role', requireAuth, circleController.updateMemberRole)
+router.get('/:id/members', requireAuth, circleController.listCircleMembers)
+router.put('/:id/pin', requireAuth, circleController.updateCirclePin)
+router.put('/:id', requireAuth, circleController.updateCircle)
+
+// Channel Management
 router.get('/:id/channels', circleController.listChannels)
 router.post('/:id/channels', circleController.createChannel)
+router.post('/channels/:id/verify-pin', requireAuth, circleController.verifyChannelPin)
+router.put('/channels/:id/pin', requireAuth, circleController.updateChannelPin)
 
 export default router

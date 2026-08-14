@@ -122,11 +122,33 @@ export const postsApi = {
 
 export const circlesApi = {
   list: () => api.get<CircleListResponse>('/api/circles', { useCache: true }),
-  create: (data: { name: string; description: string; initialChannel?: string }) =>
+  create: (data: { name: string; description: string; initialChannel?: string; pin?: string }) =>
     api.post<{ circle: import('@/types').Circle }>('/api/circles', data, { auth: false }),
   channels: (circleId: string) => api.get<{ channels: import('@/types').Channel[] }>(`/api/circles/${circleId}/channels`),
-  createChannel: (circleId: string, name: string) =>
-    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name }, { auth: false }),
+  createChannel: (circleId: string, name: string, pin?: string) =>
+    api.post<{ channel: import('@/types').Channel }>(`/api/circles/${circleId}/channels`, { name, pin }, { auth: false }),
+  verifyPin: (circleId: string, pin: string) =>
+    api.post<{ ok: boolean; role: string }>(`/api/circles/${circleId}/verify-pin`, { pin }),
+  requestAccess: (circleId: string) =>
+    api.post<{ ok: boolean; status: string }>(`/api/circles/${circleId}/request-access`),
+  listRequests: (circleId: string) =>
+    api.get<{ requests: any[] }>(`/api/circles/${circleId}/requests`),
+  resolveRequest: (circleId: string, requestId: string, status: 'approved' | 'rejected') =>
+    api.post<{ ok: boolean }>(`/api/circles/${circleId}/requests/${requestId}/resolve`, { status }),
+  updateRole: (circleId: string, userId: string, role: string) =>
+    api.post<{ ok: boolean }>(`/api/circles/${circleId}/members/${userId}/role`, { role }),
+  updatePin: (circleId: string, pin: string) =>
+    api.put<{ ok: boolean }>(`/api/circles/${circleId}/pin`, { pin }),
+  updateCircle: (circleId: string, name: string, description: string) =>
+    api.put<{ ok: boolean }>(`/api/circles/${circleId}`, { name, description }),
+  getCircle: (circleId: string) =>
+    api.get<{ circle: any }>(`/api/circles/${circleId}`),
+  listMembers: (circleId: string) =>
+    api.get<{ members: any[] }>(`/api/circles/${circleId}/members`),
+  verifyChannelPin: (channelId: string, pin: string) =>
+    api.post<{ ok: boolean }>(`/api/circles/channels/${channelId}/verify-pin`, { pin }),
+  updateChannelPin: (channelId: string, pin: string) =>
+    api.put<{ ok: boolean }>(`/api/circles/channels/${channelId}/pin`, { pin }),
 }
 
 export const messagesApi = {
@@ -161,6 +183,13 @@ export const navigationApi = {
       geometry?: any
       straightLine?: any
     }>(`/api/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`, { useCache: false }),
+}
+
+export const nearbyApi = {
+  heartbeat: (lat: number, lng: number) =>
+    api.post<{ peers: any[] }>('/api/nearby/heartbeat', { lat, lng }),
+  sync: (lat: number, lng: number, localPosts: any[], localMessages: any[]) =>
+    api.post<{ posts: any[]; ok: boolean }>('/api/nearby/sync', { lat, lng, localPosts, localMessages }),
 }
 
 export const pastesApi = {

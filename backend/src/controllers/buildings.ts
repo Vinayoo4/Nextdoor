@@ -19,7 +19,7 @@ const BUILDING_SECTIONS: { key: string; label: string; types: BuildingType[] }[]
 ]
 
 export const getGuide = asyncHandler(async (_req: Request, res: Response) => {
-  const all = buildingRepository.findGuide('jaipur') // default cityId
+  const all = buildingRepository.findGuide('rewari') // default cityId
   const sections = BUILDING_SECTIONS.map((section) => ({
     key: section.key,
     label: section.label,

@@ -40,6 +40,67 @@ export function closeDatabase(): void {
 
 export function runMigrations(): void {
   const database = getDatabase()
+
+  // 1. Run migrations for ALTERing tables if they exist
+  try {
+    const circlesInfo = database.pragma("table_info(circles)") as any[];
+    const circlesHasPin = circlesInfo.some((col: any) => col.name === 'pin');
+    if (!circlesHasPin && circlesInfo.length > 0) {
+      database.exec("ALTER TABLE circles ADD COLUMN pin TEXT;");
+      console.log("[db migration] Added pin column to circles");
+    }
+  } catch (e) {
+    console.error("Migration error circles pin:", e);
+  }
+
+  try {
+    const channelsInfo = database.pragma("table_info(channels)") as any[];
+    const channelsHasPin = channelsInfo.some((col: any) => col.name === 'pin');
+    if (!channelsHasPin && channelsInfo.length > 0) {
+      database.exec("ALTER TABLE channels ADD COLUMN pin TEXT;");
+      console.log("[db migration] Added pin column to channels");
+    }
+  } catch (e) {
+    console.error("Migration error channels pin:", e);
+  }
+
+  try {
+    const membersInfo = database.pragma("table_info(circle_members)") as any[];
+    if (membersInfo.length > 0) {
+      const currentOwnerCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'owner'").get() as any;
+      const currentAdminCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'admin'").get() as any;
+      if ((currentOwnerCount && currentOwnerCount.count > 0) || (currentAdminCount && currentAdminCount.count > 0)) {
+        console.log("[db migration] Migrating circle_members role schema...");
+        database.transaction(() => {
+          database.exec(`
+            CREATE TABLE IF NOT EXISTS circle_members_new (
+              id TEXT PRIMARY KEY,
+              circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+              user_id TEXT NOT NULL REFERENCES users(id),
+              role TEXT DEFAULT 'member' CHECK (role IN ('member','elder','co_admin','admin')),
+              joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              UNIQUE(circle_id, user_id)
+            );
+          `);
+          database.exec(`
+            INSERT OR IGNORE INTO circle_members_new (id, circle_id, user_id, role, joined_at)
+            SELECT id, circle_id, user_id,
+                   CASE WHEN role = 'owner' THEN 'admin'
+                        WHEN role = 'admin' THEN 'co_admin'
+                        ELSE 'member' END,
+                   joined_at
+            FROM circle_members;
+          `);
+          database.exec("DROP TABLE circle_members;");
+          database.exec("ALTER TABLE circle_members_new RENAME TO circle_members;");
+        })();
+        console.log("[db migration] Recreated circle_members with new roles check constraint");
+      }
+    }
+  } catch (e) {
+    console.error("Migration error circle_members roles:", e);
+  }
+
   const schema = getSchema()
   
   for (const statement of schema) {
@@ -146,6 +207,7 @@ function getSchema(): string[] {
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
       creator_id TEXT NOT NULL REFERENCES users(id),
+      pin TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       deleted_at DATETIME
@@ -155,8 +217,18 @@ function getSchema(): string[] {
       id TEXT PRIMARY KEY,
       circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id),
-      role TEXT DEFAULT 'member' CHECK (role IN ('member','admin','owner')),
+      role TEXT DEFAULT 'member' CHECK (role IN ('member','elder','co_admin','admin')),
       joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(circle_id, user_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS circle_requests (
+      id TEXT PRIMARY KEY,
+      circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(circle_id, user_id)
     )`,
 
@@ -164,6 +236,7 @@ function getSchema(): string[] {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+      pin TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       deleted_at DATETIME

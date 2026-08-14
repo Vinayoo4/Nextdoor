@@ -4,6 +4,7 @@ export interface Channel {
   id: string
   name: string
   circle_id: string
+  pin: string | null
   created_at: Date
   updated_at: Date
   deleted_at: Date | null
@@ -12,6 +13,7 @@ export interface Channel {
 export interface CreateChannelInput {
   name: string
   circle_id: string
+  pin?: string
 }
 
 export class ChannelRepository extends BaseRepository {
@@ -44,9 +46,9 @@ export class ChannelRepository extends BaseRepository {
     const timestamp = now()
     
     this.executeRun(
-      `INSERT INTO ${this.table} (id, name, circle_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, input.name, input.circle_id, timestamp, timestamp]
+      `INSERT INTO ${this.table} (id, name, circle_id, pin, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, input.name, input.circle_id, input.pin || null, timestamp, timestamp]
     )
     
     return this.findById(id)!
@@ -61,6 +63,14 @@ export class ChannelRepository extends BaseRepository {
       [name, now(), id]
     )
     return this.findById(id)
+  }
+
+  updatePin(id: string, pin: string | null): boolean {
+    const result = this.executeRun(
+      `UPDATE ${this.table} SET pin = ?, updated_at = ? WHERE id = ?`,
+      [pin, now(), id]
+    )
+    return result.changes > 0
   }
 
   softDelete(id: string): boolean {

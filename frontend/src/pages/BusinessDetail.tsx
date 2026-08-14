@@ -94,6 +94,10 @@ export default function BusinessDetail() {
   async function submitReview(e: React.FormEvent) {
     e.preventDefault()
     setReviewError('')
+    if (!token) {
+      setReviewError('You must be signed in with your email to submit a review.')
+      return
+    }
     if (rating < 1) {
       setReviewError('Please select a rating')
       return

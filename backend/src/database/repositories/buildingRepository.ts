@@ -74,7 +74,7 @@ export class BuildingRepository extends BaseRepository {
     }
   }
 
-  findGuide(cityId: string = 'jaipur'): Building[] {
+  findGuide(cityId: string = 'rewari'): Building[] {
     const rows = this.executeQuery<Building>(
       `SELECT * FROM ${this.table} WHERE city_id = ? ORDER BY name ASC`,
       [cityId]
@@ -110,7 +110,7 @@ export class BuildingRepository extends BaseRepository {
       [
         id, input.name, input.type, input.address, input.timings || null, input.contact || null,
         JSON.stringify(input.services || []), input.description || null, JSON.stringify(input.photos || []),
-        input.city_id || 'jaipur', input.location_lat || null, input.location_lng || null, timestamp, timestamp
+        input.city_id || 'rewari', input.location_lat || null, input.location_lng || null, timestamp, timestamp
       ]
     )
     

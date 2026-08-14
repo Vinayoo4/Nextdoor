@@ -229,7 +229,7 @@ async function seed() {
       services: bld.services,
       description: bld.description,
       photos: [],
-      city_id: 'jaipur',
+      city_id: 'rewari',
       location_lat: bld.lat,
       location_lng: bld.lng,
     })

@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import MapView from '@/components/MapView'
 import { navigationApi } from '@/services/api'
 import { Spinner, ErrorBox } from '@/components/UI'
-import { REWARI_CENTER } from '@/utils/format'
+import { REWARI_CENTER, haversineKm } from '@/utils/format'
 
 export default function NavigatePage() {
   const [params] = useSearchParams()
@@ -13,10 +13,15 @@ export default function NavigatePage() {
   const toLng = parseFloat(params.get('lng') || '')
   const name = params.get('name') || 'Destination'
 
-  const [position, setPosition] = useState<{lat: number, lng: number} | null>(null)
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null)
   const [route, setRoute] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  // Check if coordinates are within the Rewari area boundary
+  function isInsideRewari(lat: number, lng: number): boolean {
+    return lat >= 28.0 && lat <= 28.3 && lng >= 76.4 && lng <= 76.8
+  }
 
   useEffect(() => {
     if (isNaN(toLat) || isNaN(toLng)) {
@@ -25,33 +30,68 @@ export default function NavigatePage() {
       return
     }
 
+    if (!isInsideRewari(toLat, toLng)) {
+      setError('Navigation is restricted to the City of Rewari and its surrounding areas only.')
+      setLoading(false)
+      return
+    }
+
+    function calculateLocalFallback(startLat: number, startLng: number) {
+      const dist = haversineKm({ lat: startLat, lng: startLng }, { lat: toLat, lng: toLng })
+      setRoute({
+        fallback: true,
+        distanceKm: dist,
+        durationSec: Math.round(dist * 120), // approx 2 min per km
+        straightLine: {
+          type: 'LineString',
+          coordinates: [
+            [startLng, startLat],
+            [toLng, toLat]
+          ]
+        }
+      })
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           const { latitude: lat, longitude: lng } = pos.coords
           setPosition({ lat, lng })
+          
+          if (!isInsideRewari(lat, lng)) {
+            setError('Your current location is outside the City of Rewari. Navigation is limited to Rewari and surrounding areas.')
+            setLoading(false)
+            return
+          }
+
           try {
             const data = await navigationApi.getRoute(lat, lng, toLat, toLng)
             setRoute(data)
           } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to fetch route')
+            console.log('Server routing failed, falling back to client-side haversine calculation.')
+            calculateLocalFallback(lat, lng)
           } finally {
             setLoading(false)
           }
         },
         () => {
-          // fallback to center if geo fails
+          // Fallback current location to Rewari center
           const { lat, lng } = REWARI_CENTER
           setPosition({ lat, lng })
           navigationApi.getRoute(lat, lng, toLat, toLng)
             .then(data => setRoute(data))
-            .catch(err => setError(err instanceof Error ? err.message : 'Failed to fetch route'))
+            .catch(() => {
+              console.log('Server routing failed, using client-side haversine fallback.')
+              calculateLocalFallback(lat, lng)
+            })
             .finally(() => setLoading(false))
         },
         { timeout: 5000 }
       )
     } else {
-      setError('Geolocation is not supported by your browser')
+      const { lat, lng } = REWARI_CENTER
+      setPosition({ lat, lng })
+      calculateLocalFallback(lat, lng)
       setLoading(false)
     }
   }, [toLat, toLng])
@@ -74,7 +114,7 @@ export default function NavigatePage() {
             {route.durationSec && (
               <span>ETA: <strong className="text-slate-900">{Math.round(route.durationSec / 60)} min</strong></span>
             )}
-            {route.fallback && <span className="text-amber-600 text-xs font-bold px-2 py-0.5 bg-amber-50 rounded">Offline Mode</span>}
+            {route.fallback && <span className="text-amber-600 text-xs font-bold px-2 py-0.5 bg-amber-50 rounded">Offline Fallback</span>}
           </div>
         )}
       </div>
@@ -85,7 +125,7 @@ export default function NavigatePage() {
             center={position}
             points={[
               { id: 'start', name: 'You are here', category: 'Services', location: position, popup: 'Start' },
-              { id: 'end', name, category: 'Services', location: {lat: toLat, lng: toLng}, popup: 'Destination' }
+              { id: 'end', name, category: 'Services', location: { lat: toLat, lng: toLng }, popup: 'Destination' }
             ]}
             routeGeoJSON={routeGeoJSON}
           />

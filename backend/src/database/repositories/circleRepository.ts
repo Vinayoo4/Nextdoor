@@ -5,6 +5,7 @@ export interface Circle {
   name: string
   description: string
   creator_id: string
+  pin: string | null
   created_at: Date
   updated_at: Date
   deleted_at: Date | null
@@ -14,6 +15,7 @@ export interface CreateCircleInput {
   name: string
   description?: string
   creator_id: string
+  pin?: string
 }
 
 export class CircleRepository extends BaseRepository {
@@ -74,15 +76,15 @@ export class CircleRepository extends BaseRepository {
     
     this.executeTransaction(() => {
       this.executeRun(
-        `INSERT INTO ${this.table} (id, name, description, creator_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [id, input.name, input.description || '', input.creator_id, timestamp, timestamp]
+        `INSERT INTO ${this.table} (id, name, description, creator_id, pin, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, input.name, input.description || '', input.creator_id, input.pin || null, timestamp, timestamp]
       )
       
       // Add creator as member
       this.executeRun(
         `INSERT INTO circle_members (id, circle_id, user_id, role, joined_at)
-         VALUES (?, ?, ?, 'owner', ?)`,
+         VALUES (?, ?, ?, 'admin', ?)`,
         [generateId(), id, input.creator_id, timestamp]
       )
     })
@@ -133,7 +135,7 @@ export class CircleRepository extends BaseRepository {
     return (row?.count || 0) > 0
   }
 
-  addMember(circleId: string, userId: string, role: 'member' | 'admin' | 'owner' = 'member'): boolean {
+  addMember(circleId: string, userId: string, role: 'member' | 'elder' | 'co_admin' | 'admin' = 'member'): boolean {
     try {
       this.executeRun(
         `INSERT INTO circle_members (id, circle_id, user_id, role, joined_at)
@@ -159,6 +161,85 @@ export class CircleRepository extends BaseRepository {
       `SELECT user_id, role, joined_at FROM circle_members WHERE circle_id = ? ORDER BY joined_at`,
       [circleId]
     ).map(r => this.deserializeDates(r))
+  }
+
+  updatePin(circleId: string, pin: string | null): boolean {
+    const result = this.executeRun(
+      `UPDATE circles SET pin = ?, updated_at = ? WHERE id = ?`,
+      [pin, now(), circleId]
+    )
+    return result.changes > 0
+  }
+
+  getRole(circleId: string, userId: string): string | null {
+    const row = this.executeQueryOne<{ role: string }>(
+      `SELECT role FROM circle_members WHERE circle_id = ? AND user_id = ?`,
+      [circleId, userId]
+    )
+    return row?.role || null
+  }
+
+  countMembersWithRole(circleId: string, role: string): number {
+    const row = this.executeQueryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM circle_members WHERE circle_id = ? AND role = ?`,
+      [circleId, role]
+    )
+    return row?.count || 0
+  }
+
+  updateMemberRole(circleId: string, userId: string, role: 'member' | 'elder' | 'co_admin' | 'admin'): boolean {
+    const result = this.executeRun(
+      `UPDATE circle_members SET role = ? WHERE circle_id = ? AND user_id = ?`,
+      [role, circleId, userId]
+    )
+    return result.changes > 0
+  }
+
+  createRequest(circleId: string, userId: string): boolean {
+    try {
+      this.executeRun(
+        `INSERT INTO circle_requests (id, circle_id, user_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, 'pending', ?, ?)
+         ON CONFLICT(circle_id, user_id) DO UPDATE SET status = 'pending', updated_at = ?`,
+        [generateId(), circleId, userId, now(), now(), now()]
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  getRequest(circleId: string, userId: string): any {
+    return this.executeQueryOne(
+      `SELECT * FROM circle_requests WHERE circle_id = ? AND user_id = ?`,
+      [circleId, userId]
+    )
+  }
+
+  getRequestById(requestId: string): any {
+    return this.executeQueryOne(
+      `SELECT * FROM circle_requests WHERE id = ?`,
+      [requestId]
+    )
+  }
+
+  getPendingRequests(circleId: string): any[] {
+    return this.executeQuery(
+      `SELECT cr.*, u.name as user_name, u.email as user_email 
+       FROM circle_requests cr
+       JOIN users u ON cr.user_id = u.id
+       WHERE cr.circle_id = ? AND cr.status = 'pending'
+       ORDER BY cr.created_at DESC`,
+      [circleId]
+    )
+  }
+
+  updateRequestStatus(requestId: string, status: 'approved' | 'rejected'): boolean {
+    const result = this.executeRun(
+      `UPDATE circle_requests SET status = ?, updated_at = ? WHERE id = ?`,
+      [status, now(), requestId]
+    )
+    return result.changes > 0
   }
 }
 

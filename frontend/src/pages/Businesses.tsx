@@ -40,7 +40,7 @@ export default function Businesses() {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-xl">Businesses</h1>
-          <p className="mt-0.5 text-sm text-slate-500">{total} places in Jaipur</p>
+          <p className="mt-0.5 text-sm text-slate-500">{total} places in Rewari</p>
         </div>
         <Link to="/businesses/new" className="btn-primary shrink-0">
           + Add

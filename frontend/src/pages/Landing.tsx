@@ -93,7 +93,7 @@ export default function Landing() {
       </section>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        © {new Date().getFullYear()} Nextdoor · Built for Jaipur first
+        © {new Date().getFullYear()} Nextdoor · Built for Rewari first
       </footer>
     </div>
   )

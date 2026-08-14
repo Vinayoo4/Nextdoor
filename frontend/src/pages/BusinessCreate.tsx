@@ -99,7 +99,7 @@ export default function BusinessCreate() {
           <h2 className="text-sm font-bold text-slate-700">Contact & Location</h2>
           <div>
             <label className="mb-1 block text-sm font-semibold text-slate-600">Address *</label>
-            <input className="input" required maxLength={200} value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, area, Jaipur" />
+            <input className="input" required maxLength={200} value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Street, area, Rewari" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
