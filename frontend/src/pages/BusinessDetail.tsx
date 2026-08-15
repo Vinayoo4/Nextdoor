@@ -8,6 +8,7 @@ import RatingStars from '@/components/RatingStars'
 import { Spinner, ErrorBox } from '@/components/UI'
 import { categoryMeta } from '@/utils/categories'
 import { todayHours } from '@/utils/format'
+import { APP_CONFIG } from '@/config'
 
 export default function BusinessDetail() {
   const { slug } = useParams<{ slug: string }>()
@@ -23,6 +24,21 @@ export default function BusinessDetail() {
   const [rating, setRating] = useState(0)
   const [text, setText] = useState('')
   const [reviewError, setReviewError] = useState('')
+
+  // Admin edit states
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editWhatsapp, setEditWhatsapp] = useState('')
+  const [editVerified, setEditVerified] = useState(false)
+  const [editOwnerId, setEditOwnerId] = useState('')
+  const [editLat, setEditLat] = useState(28.1928)
+  const [editLng, setEditLng] = useState(76.6186)
+  const [editPriority, setEditPriority] = useState(0)
+  const [updating, setUpdating] = useState(false)
 
   // Claim states
   const [showClaimForm, setShowClaimForm] = useState(false)
@@ -44,6 +60,20 @@ export default function BusinessDetail() {
         setBusiness(res.business)
         setOffers(res.offers)
         setReviews(res.reviews)
+        
+        // Populate edit fields
+        setEditName(res.business.name)
+        setEditDescription(res.business.description || '')
+        setEditAddress(res.business.address || '')
+        setEditCategory(res.business.category || '')
+        setEditPhone(res.business.phone || '')
+        setEditWhatsapp(res.business.whatsapp || '')
+        setEditVerified(res.business.verified || false)
+        setEditOwnerId(res.business.ownerId || '')
+        setEditLat(res.business.location?.lat ?? 28.1928)
+        setEditLng(res.business.location?.lng ?? 76.6186)
+        setEditPriority(res.business.priority ?? 0)
+
         setError('')
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load business'))
@@ -91,6 +121,46 @@ export default function BusinessDetail() {
     }
   }
 
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!business) return
+    setUpdating(true)
+    try {
+      const res = await businessesApi.update(business.id, {
+        name: editName.trim(),
+        description: editDescription.trim() || null,
+        address: editAddress.trim(),
+        category: editCategory,
+        phone: editPhone.trim(),
+        whatsapp: editWhatsapp.trim() || null,
+        verified: editVerified,
+        owner_id: editOwnerId.trim() || null,
+        location_lat: Number(editLat),
+        location_lng: Number(editLng),
+        priority: Number(editPriority),
+      })
+      setBusiness(res.business)
+      setShowEditModal(false)
+      alert('Business details updated successfully!')
+    } catch (err: any) {
+      alert(err.message || 'Failed to update business')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  async function handleDeleteBusiness() {
+    if (!business) return
+    if (!window.confirm(`Are you sure you want to permanently delete ${business.name}?`)) return
+    try {
+      await businessesApi.delete(business.id)
+      alert('Business deleted successfully!')
+      window.location.href = '/businesses'
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete business')
+    }
+  }
+
   async function submitReview(e: React.FormEvent) {
     e.preventDefault()
     setReviewError('')
@@ -117,6 +187,23 @@ export default function BusinessDetail() {
       <Link to="/businesses" className="text-sm font-semibold text-primary">
         ← All businesses
       </Link>
+
+      {user?.role === 'admin' && (
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-primary font-bold rounded-lg text-xs transition-all border border-indigo-200"
+          >
+            ⚙️ Edit Place Details
+          </button>
+          <button
+            onClick={handleDeleteBusiness}
+            className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-650 font-bold rounded-lg text-xs transition-all border border-red-200"
+          >
+            🗑️ Delete Place
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-3">
         <div>
@@ -369,7 +456,182 @@ export default function BusinessDetail() {
         </div>
       </section>
 
-      <p className="mt-6 pb-2 text-center text-xs text-slate-400">Listed on Nextdoor</p>
+      {/* Edit Business Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-slate-150 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-800">⚙️ Edit Place details</h3>
+                <p className="text-[10px] text-slate-500">Edit business, location, verified status and listing priority.</p>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
+                    required
+                  >
+                    <option value="Food">Food</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Govt">Govt</option>
+                    <option value="Banking">Banking</option>
+                    <option value="Education">Education</option>
+                    <option value="Worship">Worship</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Services">Services</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Address</label>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary min-h-14 bg-white text-slate-800"
+                  maxLength={1000}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Phone</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">WhatsApp</label>
+                  <input
+                    type="text"
+                    value={editWhatsapp}
+                    onChange={(e) => setEditWhatsapp(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Latitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLat}
+                    onChange={(e) => setEditLat(Number(e.target.value))}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Longitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLng}
+                    onChange={(e) => setEditLng(Number(e.target.value))}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Owner User ID</label>
+                  <input
+                    type="text"
+                    value={editOwnerId}
+                    placeholder="Enter owner user_id"
+                    onChange={(e) => setEditOwnerId(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-850"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-4 pl-2">
+                  <input
+                    type="checkbox"
+                    id="editVerified"
+                    checked={editVerified}
+                    onChange={(e) => setEditVerified(e.target.checked)}
+                    className="h-4 w-4 text-primary focus:ring-primary border-slate-200 rounded cursor-pointer"
+                  />
+                  <label htmlFor="editVerified" className="text-xs font-bold text-slate-700 select-none cursor-pointer">✓ Verified Place</label>
+                </div>
+              </div>
+
+              {/* Listing Priority Slider */}
+              <div className="space-y-1.5 pt-2 border-t">
+                <label className="block text-[9px] text-slate-500 font-bold uppercase">Listing Priority Rank ({editPriority})</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(Number(e.target.value))}
+                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                  />
+                  <span className="text-xs font-bold text-slate-700 w-8 text-right">{editPriority}</span>
+                </div>
+                <p className="text-[9px] text-slate-400">SALTEDHASH and TRI listings are prioritized at 100/90 to always float at the top.</p>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="flex-1 btn-primary text-xs py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg"
+                >
+                  {updating ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="btn btn-outline text-xs py-2 px-4 border border-slate-200 hover:bg-slate-50 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-6 pb-2 text-center text-xs text-slate-400">Listed on {APP_CONFIG.appName}</p>
     </div>
   )
 }

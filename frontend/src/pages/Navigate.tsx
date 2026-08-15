@@ -17,10 +17,11 @@ export default function NavigatePage() {
   const [route, setRoute] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [startName, setStartName] = useState('Your Location')
 
   // Check if coordinates are within the Rewari area boundary
   function isInsideRewari(lat: number, lng: number): boolean {
-    return lat >= 28.0 && lat <= 28.3 && lng >= 76.4 && lng <= 76.8
+    return lat >= 28.00 && lat <= 28.38 && lng >= 76.40 && lng <= 76.85
   }
 
   useEffect(() => {
@@ -30,11 +31,7 @@ export default function NavigatePage() {
       return
     }
 
-    if (!isInsideRewari(toLat, toLng)) {
-      setError('Navigation is restricted to the City of Rewari and its surrounding areas only.')
-      setLoading(false)
-      return
-    }
+    // Proceed with navigation regardless of strict boundary checks for destination coordinates
 
     function calculateLocalFallback(startLat: number, startLng: number) {
       const dist = haversineKm({ lat: startLat, lng: startLng }, { lat: toLat, lng: toLng })
@@ -55,14 +52,19 @@ export default function NavigatePage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
-          const { latitude: lat, longitude: lng } = pos.coords
-          setPosition({ lat, lng })
+          let lat = pos.coords.latitude
+          let lng = pos.coords.longitude
           
           if (!isInsideRewari(lat, lng)) {
-            setError('Your current location is outside the City of Rewari. Navigation is limited to Rewari and surrounding areas.')
-            setLoading(false)
-            return
+            console.log('User location is outside Rewari boundary, falling back start to REWARI_CENTER')
+            lat = REWARI_CENTER.lat
+            lng = REWARI_CENTER.lng
+            setStartName('Start (Rewari Center)')
+          } else {
+            setStartName('Your Location')
           }
+          
+          setPosition({ lat, lng })
 
           try {
             const data = await navigationApi.getRoute(lat, lng, toLat, toLng)
@@ -77,6 +79,7 @@ export default function NavigatePage() {
         () => {
           // Fallback current location to Rewari center
           const { lat, lng } = REWARI_CENTER
+          setStartName('Start (Rewari Center)')
           setPosition({ lat, lng })
           navigationApi.getRoute(lat, lng, toLat, toLng)
             .then(data => setRoute(data))
@@ -90,6 +93,7 @@ export default function NavigatePage() {
       )
     } else {
       const { lat, lng } = REWARI_CENTER
+      setStartName('Start (Rewari Center)')
       setPosition({ lat, lng })
       calculateLocalFallback(lat, lng)
       setLoading(false)
@@ -124,7 +128,7 @@ export default function NavigatePage() {
           <MapView
             center={position}
             points={[
-              { id: 'start', name: 'You are here', category: 'Services', location: position, popup: 'Start' },
+              { id: 'start', name: startName, category: 'Services', location: position, popup: 'Start' },
               { id: 'end', name, category: 'Services', location: { lat: toLat, lng: toLng }, popup: 'Destination' }
             ]}
             routeGeoJSON={routeGeoJSON}

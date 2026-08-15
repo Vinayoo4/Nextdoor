@@ -7,7 +7,7 @@ export interface SendEmailOptions {
   html?: string
 }
 
-const RESEND_API_URL = 'https://api.resend.com/emails'
+const RESEND_API_URL = env.resendApiUrl
 
 async function sendViaResend({ to, subject, text, html }: SendEmailOptions): Promise<void> {
   if (!env.resendApiKey) {

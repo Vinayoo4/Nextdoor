@@ -89,6 +89,17 @@ export const transientStore = {
     return fullMsg
   },
 
+  deleteMessage(channelId: string, messageId: string): boolean {
+    const list = messagesCache[channelId]
+    if (!list) return false
+    const idx = list.findIndex((m) => m.id === messageId)
+    if (idx !== -1) {
+      list.splice(idx, 1)
+      return true
+    }
+    return false
+  },
+
   // Posts
   getPosts(lat?: number, lng?: number, radiusKm: number = 5): TransientPost[] {
     if (lat !== undefined && lng !== undefined) {
@@ -110,6 +121,16 @@ export const transientStore = {
       postsCache.pop()
     }
     return fullPost
+  },
+
+  deletePost(postId: string): boolean {
+    const idx = postsCache.findIndex((p) => p.id === postId)
+    if (idx !== -1) {
+      postsCache.splice(idx, 1)
+      delete commentsCache[postId]
+      return true
+    }
+    return false
   },
 
   // Comments

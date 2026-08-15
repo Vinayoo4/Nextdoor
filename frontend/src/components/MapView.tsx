@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Business, LatLng } from '@/types'
 import { categoryMeta } from '@/utils/categories'
-import { REWARI_CENTER } from '@/utils/format'
+import { APP_CONFIG, REWARI_CENTER } from '@/config'
 
 interface MapPoint {
   id: string
@@ -44,12 +44,14 @@ export default function MapView({
   center = REWARI_CENTER,
   zoom = 13,
   className = 'h-72 w-full rounded-2xl',
+  selectedPointId,
 }: {
   points: MapPoint[]
   routeGeoJSON?: any
   center?: LatLng
   zoom?: number
   className?: string
+  selectedPointId?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -58,10 +60,17 @@ export default function MapView({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
-    const map = L.map(containerRef.current, { attributionControl: true }).setView([center.lat, center.lng], zoom)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const rewariBounds = L.latLngBounds([28.00, 76.40], [28.38, 76.85])
+    const map = L.map(containerRef.current, {
+      attributionControl: true,
+      maxBounds: rewariBounds,
+      minZoom: 11,
+      maxBoundsViscosity: 1.0,
+    }).setView([center.lat, center.lng], Math.max(zoom, 12))
+
+    L.tileLayer(APP_CONFIG.mapTileUrl, {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
+      attribution: APP_CONFIG.osmAttribution,
     }).addTo(map)
     mapRef.current = map
     return () => {
@@ -69,7 +78,14 @@ export default function MapView({
       mapRef.current = null
       markersRef.current = {}
     }
-  }, [center.lat, center.lng, zoom])
+  }, []) // Initialize map instance exactly once on mount
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (map) {
+      map.setView([center.lat, center.lng], map.getZoom() || zoom)
+    }
+  }, [center.lat, center.lng])
 
   useEffect(() => {
     const map = mapRef.current
@@ -120,6 +136,17 @@ export default function MapView({
       map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 16 })
     }
   }, [routeGeoJSON])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !selectedPointId) return
+    const marker = markersRef.current[selectedPointId]
+    if (marker) {
+      const latlng = marker.getLatLng()
+      map.setView(latlng, Math.max(zoom, 15))
+      marker.openPopup()
+    }
+  }, [selectedPointId, zoom])
 
   return <div ref={containerRef} className={className} />
 }

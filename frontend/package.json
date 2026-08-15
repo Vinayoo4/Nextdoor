@@ -10,6 +10,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@clerk/react": "^6.14.3",
     "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "react": "^19.1.0",

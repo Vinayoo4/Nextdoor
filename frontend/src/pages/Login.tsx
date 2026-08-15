@@ -1,28 +1,50 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/services/api'
-import { useAuthStore } from '@/stores/auth'
+import { useSignIn } from '@clerk/react/legacy'
 
 export default function Login() {
   const navigate = useNavigate()
-  const setAuth = useAuthStore((s) => s.setAuth)
+  const { signIn, isLoaded, setActive } = useSignIn()
+
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
-  const [devOtp, setDevOtp] = useState('')
   const [step, setStep] = useState<'email' | 'otp'>('email')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-indigo-950">
+        <p className="text-sm font-semibold text-indigo-200">Loading auth system…</p>
+      </div>
+    )
+  }
+
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault()
+    if (!signIn) return
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ message: string; devOtp?: string }>('/api/auth/otp/request', { email })
-      setDevOtp(res.devOtp ?? '')
+      const result = await signIn.create({
+        identifier: email.trim(),
+      })
+
+      const firstFactor = result.supportedFirstFactors?.find(
+        (factor: any) => factor.strategy === 'email_code'
+      ) as any
+
+      if (!firstFactor) {
+        throw new Error('Email verification is not supported for this account.')
+      }
+
+      await signIn.prepareFirstFactor({
+        strategy: 'email_code',
+        emailAddressId: firstFactor.emailAddressId,
+      })
       setStep('otp')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to request OTP')
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || err.message || 'Failed to request OTP')
     } finally {
       setLoading(false)
     }
@@ -30,14 +52,25 @@ export default function Login() {
 
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault()
+    if (!signIn || !setActive) return
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ token: string; user: any }>('/api/auth/otp/verify', { email, otp })
-      setAuth(res.token, res.user)
-      navigate('/home', { replace: true })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      const result = await signIn.attemptFirstFactor({
+        strategy: 'email_code',
+        code: otp.trim(),
+      })
+
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId })
+        // Clerk session will automatically trigger the App.tsx SessionBootstrap component 
+        // to sync the user info with the local backend and set local session tokens!
+        navigate('/home', { replace: true })
+      } else {
+        setError('Sign in incomplete. Please try again.')
+      }
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || err.message || 'Login failed')
     } finally {
       setLoading(false)
     }
@@ -51,7 +84,7 @@ export default function Login() {
         <p className="mt-1 text-sm text-indigo-200">Welcome back to your neighborhood</p>
       </div>
 
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl animate-in fade-in duration-200">
         {step === 'email' ? (
           <form onSubmit={handleRequestOtp} className="space-y-4">
             <div>
@@ -62,7 +95,7 @@ export default function Login() {
                 id="email"
                 type="email"
                 required
-                className="input"
+                className="input text-slate-800 bg-white border border-slate-200 focus:border-primary font-semibold"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -81,11 +114,9 @@ export default function Login() {
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            {devOtp && (
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
-                <strong>Dev OTP:</strong> {devOtp} (will be removed in production)
-              </div>
-            )}
+            <div className="rounded border border-indigo-100 bg-indigo-50/50 p-2.5 text-xs text-indigo-800 leading-normal">
+              📧 Clerk has dispatched a real OTP verification code to <strong>{email}</strong>. Please check your inbox.
+            </div>
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="otp">
                 Enter 6-digit OTP sent to {email}
@@ -95,7 +126,7 @@ export default function Login() {
                 type="text"
                 required
                 maxLength={6}
-                className="input text-center text-2xl tracking-[0.5em]"
+                className="input text-center text-2xl tracking-[0.5em] text-slate-850 bg-white border border-slate-200 focus:border-primary"
                 placeholder="000000"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -117,7 +148,6 @@ export default function Login() {
               onClick={() => {
                 setStep('email')
                 setOtp('')
-                setDevOtp('')
                 setError('')
               }}
             >
@@ -128,7 +158,7 @@ export default function Login() {
       </div>
 
       <p className="mt-6 text-sm text-indigo-200">
-        Secure passwordless sign in.
+        Secure passwordless sign in via Clerk.
       </p>
     </div>
   )

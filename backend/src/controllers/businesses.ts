@@ -157,24 +157,37 @@ export const updateBusiness = asyncHandler(async (req: Request, res: Response) =
     throw new ApiError(403, 'Only the owner or an admin can edit this business')
   }
 
-  const { name, description, phone, whatsapp, photos, attributes, hours } = parseBody(
+  const isAdmin = req.user?.role === 'admin'
+
+  const {
+    name, description, phone, whatsapp, photos, attributes, hours,
+    address, category, subcategory, verified, owner_id, location_lat, location_lng, priority
+  } = parseBody(
     req,
     z.object({
       name: z.string().min(1).max(80).optional(),
-      description: z.string().max(2000).optional(),
+      description: z.string().max(2000).optional().nullable(),
       phone: z.string().min(7).max(20).optional(),
-      whatsapp: z.string().max(20).optional(),
-      photos: z.array(z.string().url()).max(6).optional(),
+      whatsapp: z.string().max(20).optional().nullable(),
+      photos: z.array(z.string()).max(10).optional(),
       attributes: z.object({ parking: z.boolean().optional(), cards: z.boolean().optional(), homeDelivery: z.boolean().optional() }).optional(),
       hours: z.record(z.object({ open: z.string(), close: z.string() })).optional(),
+      address: z.string().optional(),
+      category: z.string().optional(),
+      subcategory: z.string().optional().nullable(),
+      verified: z.boolean().optional(),
+      owner_id: z.string().optional().nullable(),
+      location_lat: z.number().optional(),
+      location_lng: z.number().optional(),
+      priority: z.number().optional(),
     })
   )
 
-  const updated = businessRepository.update(req.params.id, {
+  const updateFields: any = {
     name,
-    description,
+    description: description === null ? '' : description,
     phone,
-    whatsapp,
+    whatsapp: whatsapp === null ? '' : whatsapp,
     photos,
     attributes: attributes ? {
       parking: !!attributes.parking,
@@ -182,8 +195,20 @@ export const updateBusiness = asyncHandler(async (req: Request, res: Response) =
       homeDelivery: !!attributes.homeDelivery,
     } : undefined,
     hours
-  })
+  }
 
+  if (isAdmin) {
+    if (address !== undefined) updateFields.address = address
+    if (category !== undefined) updateFields.category = category
+    if (subcategory !== undefined) updateFields.subcategory = subcategory ?? undefined
+    if (verified !== undefined) updateFields.verified = verified
+    if (owner_id !== undefined) updateFields.owner_id = owner_id ?? null
+    if (location_lat !== undefined) updateFields.location_lat = location_lat
+    if (location_lng !== undefined) updateFields.location_lng = location_lng
+    if (priority !== undefined) updateFields.priority = priority
+  }
+
+  const updated = businessRepository.update(req.params.id, updateFields)
   res.json({ business: serializeBusiness(updated) })
 })
 
@@ -307,4 +332,17 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
     email: email || undefined
   })!
   res.json({ user: serializeUser(updated) })
+})
+
+export const deleteBusiness = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireUserId(req)
+  const business = businessRepository.findById(req.params.id)
+  if (!business) throw new ApiError(404, 'Business not found')
+
+  if (business.owner_id !== userId && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'Only the owner or an admin can delete this business')
+  }
+
+  businessRepository.softDelete(req.params.id)
+  res.json({ ok: true })
 })

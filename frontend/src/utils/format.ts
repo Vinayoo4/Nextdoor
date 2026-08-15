@@ -31,7 +31,7 @@ export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; l
   return 2 * R * Math.asin(Math.sqrt(s))
 }
 
-export const REWARI_CENTER = { lat: 28.1928, lng: 76.6186 }
+export { REWARI_CENTER } from '@/config'
 
 export function todayHours(hours: Record<string, { open: string; close: string }> | undefined): { open: string; close: string } | null {
   if (!hours) return null

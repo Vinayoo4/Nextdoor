@@ -89,6 +89,21 @@ export default function Feed() {
 
   useEffect(loadFeed, [coords])
 
+  async function handleDeletePost(postId: string) {
+    if (!window.confirm('Are you sure you want to delete this post?')) return
+    try {
+      try {
+        await postsApi.delete(postId)
+      } catch (apiErr) {
+        console.warn('API post deletion warning:', apiErr)
+      }
+      await localDb.deletePost(postId)
+      setPosts((prev) => prev.filter((p) => p.id !== postId))
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete post')
+    }
+  }
+
   // 4. Submit post
   async function handlePost(e: React.FormEvent) {
     e.preventDefault()
@@ -112,10 +127,21 @@ export default function Feed() {
       await localDb.savePost(postPayload)
       setPosts((p) => [postPayload, ...p])
 
+      let serverPost: any = null
       // Push transiently to server
       if (token) {
-        await postsApi.create(content.trim(), coords.lat, coords.lng)
+        const res = await postsApi.create(content.trim(), coords.lat, coords.lng)
+        serverPost = res.post
       }
+
+      // Delete local temporary post and store server post instead
+      await localDb.deletePost(postPayload.id)
+      if (serverPost) {
+        await localDb.savePost(serverPost)
+      } else {
+        await localDb.savePost(postPayload)
+      }
+
       setContent('')
       loadFeed()
     } catch (err) {
@@ -226,15 +252,25 @@ export default function Feed() {
       ) : (
         <div className="mt-4 space-y-3">
           {posts.map((p) => (
-            <article key={p.id} className="card">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 font-bold text-primary">
-                  {p.author_name ? p.author_name[0]?.toUpperCase() : p.authorName?.[0]?.toUpperCase() || 'U'}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{p.author_name || p.authorName}</p>
-                  <p className="text-xs text-slate-400">{timeAgo(p.created_at || p.createdAt)}</p>
+            <article key={p.id} className="card relative group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 font-bold text-primary">
+                    {p.author_name ? p.author_name[0]?.toUpperCase() : p.authorName?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{p.author_name || p.authorName}</p>
+                    <p className="text-xs text-slate-400">{timeAgo(p.created_at || p.createdAt)}</p>
+                  </div>
                 </div>
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => handleDeletePost(p.id)}
+                    className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded bg-red-50 hover:bg-red-100 transition-colors"
+                  >
+                    🗑️ Delete Post
+                  </button>
+                )}
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{p.content}</p>
             </article>

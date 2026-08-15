@@ -16,6 +16,7 @@ const otpRequestLimiter = rateLimit({
 
 router.post('/otp/request', otpRequestLimiter, authController.requestOtp)
 router.post('/otp/verify', authController.verifyOtp)
+router.post('/clerk-sync', authController.clerkSync)
 router.post('/logout', requireAuth, authController.logout)
 router.get('/me', requireAuth, authController.me)
 

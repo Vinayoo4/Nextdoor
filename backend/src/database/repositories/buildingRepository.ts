@@ -117,6 +117,39 @@ export class BuildingRepository extends BaseRepository {
     return this.findById(id)!
   }
 
+  update(id: string, input: Partial<CreateBuildingInput>): Building | null {
+    const existing = this.findById(id)
+    if (!existing) return null
+
+    const updates: string[] = []
+    const params: unknown[] = []
+
+    if (input.name !== undefined) { updates.push('name = ?'); params.push(input.name) }
+    if (input.type !== undefined) { updates.push('type = ?'); params.push(input.type) }
+    if (input.address !== undefined) { updates.push('address = ?'); params.push(input.address) }
+    if (input.timings !== undefined) { updates.push('timings = ?'); params.push(input.timings) }
+    if (input.contact !== undefined) { updates.push('contact = ?'); params.push(input.contact) }
+    if (input.services !== undefined) { updates.push('services = ?'); params.push(JSON.stringify(input.services)) }
+    if (input.description !== undefined) { updates.push('description = ?'); params.push(input.description) }
+    if (input.photos !== undefined) { updates.push('photos = ?'); params.push(JSON.stringify(input.photos)) }
+    if (input.location_lat !== undefined) { updates.push('location_lat = ?'); params.push(input.location_lat) }
+    if (input.location_lng !== undefined) { updates.push('location_lng = ?'); params.push(input.location_lng) }
+
+    if (updates.length === 0) return existing
+
+    updates.push('updated_at = ?')
+    params.push(now())
+    params.push(id)
+
+    this.executeRun(`UPDATE ${this.table} SET ${updates.join(', ')} WHERE id = ?`, params)
+    return this.findById(id)
+  }
+
+  delete(id: string): boolean {
+    const result = this.executeRun(`DELETE FROM ${this.table} WHERE id = ?`, [id])
+    return result.changes > 0
+  }
+
   deleteAll(): void {
     this.executeRun(`DELETE FROM ${this.table}`)
   }

@@ -65,7 +65,16 @@ export const getPost = asyncHandler(async (req: Request, res: Response) => {
 })
 
 export const deletePost = asyncHandler(async (req: Request, res: Response) => {
-  // Post deletion is bypassed for transient posts since they are in-memory
+  const userId = requireUserId(req)
+  const posts = transientStore.getPosts()
+  const post = posts.find((p) => p.id === req.params.id)
+  if (!post) throw new ApiError(404, 'Post not found')
+
+  if (post.user_id !== userId && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'Only the author or an admin can delete this post')
+  }
+
+  transientStore.deletePost(post.id)
   res.json({ ok: true })
 })
 

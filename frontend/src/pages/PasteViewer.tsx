@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { pastesApi } from '@/services/api'
+import { APP_CONFIG } from '@/config'
 import { useAuthStore } from '@/stores/auth'
 import type { Paste, PasteComment } from '@/types'
 
@@ -151,7 +152,7 @@ export default function PasteViewer() {
             📋 Copy
           </button>
           <a
-            href={`${import.meta.env.VITE_API_URL || ''}/api/pastes/${paste.id}/raw`}
+            href={`${APP_CONFIG.apiUrl}/api/pastes/${paste.id}/raw`}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 text-[10px]"

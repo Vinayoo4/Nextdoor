@@ -89,6 +89,7 @@ export interface UpdateBusinessInput {
   locality_id?: string | null
   rating_avg?: number
   rating_count?: number
+  priority?: number
 }
 
 export class BusinessRepository extends BaseRepository {
@@ -224,7 +225,8 @@ export class BusinessRepository extends BaseRepository {
       location_lng: 'location_lng',
       locality_id: 'locality_id',
       rating_avg: 'rating_avg',
-      rating_count: 'rating_count'
+      rating_count: 'rating_count',
+      priority: 'priority'
     }
 
     for (const [key, column] of Object.entries(fieldMap)) {

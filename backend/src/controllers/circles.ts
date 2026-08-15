@@ -237,8 +237,9 @@ export const getCircle = asyncHandler(async (req: Request, res: Response) => {
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const isMember = circleRepository.isMember(circle.id, userId)
-  const role = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const isMember = isSystemAdmin || circleRepository.isMember(circle.id, userId)
+  const role = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
 
   res.json({
     circle: {
@@ -246,6 +247,7 @@ export const getCircle = asyncHandler(async (req: Request, res: Response) => {
       name: circle.name,
       description: circle.description,
       hasPin: !!circle.pin,
+      pin: isSystemAdmin ? circle.pin : undefined,
       isMember,
       role
     }
@@ -318,7 +320,7 @@ export const listMessages = asyncHandler(async (req: Request, res: Response) => 
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
-  const isMem = circleRepository.isMember(channel.circle_id, userId)
+  const isMem = circleRepository.isMember(channel.circle_id, userId) || req.user?.role === 'admin'
   if (!isMem) {
     throw new ApiError(403, 'You must be a member of the circle to view chat')
   }
@@ -352,7 +354,7 @@ export const createMessage = asyncHandler(async (req: Request, res: Response) =>
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
-  const isMem = circleRepository.isMember(channel.circle_id, userId)
+  const isMem = circleRepository.isMember(channel.circle_id, userId) || req.user?.role === 'admin'
   if (!isMem) {
     throw new ApiError(403, 'You must join this circle first')
   }
@@ -391,4 +393,40 @@ export const listCircleMembers = asyncHandler(async (req: Request, res: Response
     }
   })
   res.json({ members: detailedMembers })
+})
+
+export const deleteCircle = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireUserId(req)
+  const circle = circleRepository.findById(req.params.id)
+  if (!circle) throw new ApiError(404, 'Circle not found')
+
+  const role = circleRepository.getRole(circle.id, userId)
+  if (role !== 'admin' && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'Only the circle creator or system admin can delete this circle')
+  }
+
+  circleRepository.softDelete(circle.id)
+  res.json({ ok: true })
+})
+
+export const deleteMessage = asyncHandler(async (req: Request, res: Response) => {
+  const userId = requireUserId(req)
+  const { channelId, messageId } = req.params
+
+  const channel = channelRepository.findById(channelId)
+  if (!channel) throw new ApiError(404, 'Channel not found')
+
+  const isMem = circleRepository.isMember(channel.circle_id, userId) || req.user?.role === 'admin'
+  if (!isMem) throw new ApiError(403, 'Must join the circle first')
+
+  const messages = transientStore.getMessages(channelId)
+  const msg = messages.find((m) => m.id === messageId)
+  if (!msg) throw new ApiError(404, 'Message not found')
+
+  if (msg.user_id !== userId && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'Only the author or system admin can delete this message')
+  }
+
+  transientStore.deleteMessage(channelId, messageId)
+  res.json({ ok: true })
 })

@@ -19,9 +19,10 @@ export const env = {
   corsOrigin: process.env.CORS_ORIGIN?.split(',')
     .map((s) => s.trim())
     .filter(Boolean) ?? ['http://localhost:5173'],
-  seedAdminEmail: process.env.SEED_ADMIN_EMAIL ?? '',
+  superAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? '',
   emailProvider: process.env.EMAIL_PROVIDER ?? 'console',
   resendApiKey: process.env.RESEND_API_KEY ?? '',
+  resendApiUrl: process.env.RESEND_API_URL ?? 'https://api.resend.com/emails',
   smtpHost: process.env.SMTP_HOST ?? '',
   smtpPort: Number(process.env.SMTP_PORT ?? 587),
   smtpSecure: process.env.SMTP_SECURE === 'true',

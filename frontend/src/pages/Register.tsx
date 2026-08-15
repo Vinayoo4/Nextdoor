@@ -1,29 +1,47 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api } from '@/services/api'
-import { useAuthStore } from '@/stores/auth'
+import { useSignUp } from '@clerk/react/legacy'
+import { APP_CONFIG } from '@/config'
 
 export default function Register() {
   const navigate = useNavigate()
-  const setAuth = useAuthStore((s) => s.setAuth)
+  const { signUp, isLoaded, setActive } = useSignUp()
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')
-  const [devOtp, setDevOtp] = useState('')
   const [step, setStep] = useState<'email' | 'otp'>('email')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-55">
+        <p className="text-sm font-semibold text-slate-500">Loading auth system…</p>
+      </div>
+    )
+  }
+
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault()
+    if (!signUp) return
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ message: string; devOtp?: string }>('/api/auth/otp/request', { email })
-      setDevOtp(res.devOtp ?? '')
+      const parts = name.trim().split(' ')
+      const firstName = parts[0] || 'User'
+      const lastName = parts.slice(1).join(' ') || ''
+
+      await signUp.create({
+        emailAddress: email.trim(),
+        firstName,
+        lastName,
+      })
+
+      await signUp.prepareVerification({ strategy: 'email_code' })
       setStep('otp')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to request OTP')
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || err.message || 'Failed to request OTP')
     } finally {
       setLoading(false)
     }
@@ -31,23 +49,34 @@ export default function Register() {
 
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault()
+    if (!signUp || !setActive) return
     setError('')
     setLoading(true)
     try {
-      const res = await api.post<{ token: string; user: any }>('/api/auth/otp/verify', { email, otp, name })
-      setAuth(res.token, res.user)
-      navigate('/home', { replace: true })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed')
+      const result = await signUp.attemptVerification({
+        strategy: 'email_code',
+        code: otp.trim(),
+      })
+
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId })
+        // Clerk session will automatically trigger the App.tsx SessionBootstrap component 
+        // to sync the user info with the local backend and set local session tokens!
+        navigate('/home', { replace: true })
+      } else {
+        setError('Sign up incomplete. Please try again.')
+      }
+    } catch (err: any) {
+      setError(err.errors?.[0]?.message || err.message || 'Registration failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-5 py-10">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-55 px-5 py-10">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">Join Nextdoor</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Join {APP_CONFIG.appName}</h1>
         <p className="text-sm text-slate-500">Connect with your neighborhood.</p>
       </div>
 
@@ -95,11 +124,9 @@ export default function Register() {
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            {devOtp && (
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
-                <strong>Dev OTP:</strong> {devOtp} (will be removed in production)
-              </div>
-            )}
+            <div className="rounded border border-indigo-100 bg-indigo-50/50 p-2.5 text-xs text-indigo-800 leading-normal">
+              📧 Clerk has dispatched a real OTP verification code to <strong>{email}</strong>. Please check your inbox.
+            </div>
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="otp">
                 Enter 6-digit OTP sent to {email}
@@ -132,7 +159,6 @@ export default function Register() {
               onClick={() => {
                 setStep('email')
                 setOtp('')
-                setDevOtp('')
                 setError('')
               }}
             >

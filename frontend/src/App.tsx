@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
+import { authApi, api } from '@/services/api'
 import { useOnline } from '@/hooks/useOnline'
+import { useUser } from '@clerk/react'
 import Layout from '@/components/Layout'
 import OfflineBanner from '@/components/OfflineBanner'
 import Landing from '@/pages/Landing'
@@ -50,11 +52,60 @@ function GuestOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Validates and synchronizes the Clerk authentication state with our local session token.
+function SessionBootstrap() {
+  const token = useAuthStore((s) => s.token)
+  const setUser = useAuthStore((s) => s.setUser)
+  const clear = useAuthStore((s) => s.clear)
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser()
+
+  useEffect(() => {
+    if (!clerkLoaded) return
+
+    if (clerkUser) {
+      const email = clerkUser.primaryEmailAddress?.emailAddress
+      const name = clerkUser.fullName || clerkUser.firstName || email?.split('@')[0]
+      if (email && (!token || useAuthStore.getState().user?.email !== email)) {
+        api.post<{ token: string; user: any }>('/api/auth/clerk-sync', { email, name })
+          .then((res) => {
+            useAuthStore.getState().setAuth(res.token, res.user)
+          })
+          .catch((err) => {
+            console.error('Failed to sync Clerk session:', err)
+          })
+      }
+    } else {
+      if (token) {
+        clear()
+      }
+    }
+  }, [clerkUser, clerkLoaded, token, clear])
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    authApi
+      .me()
+      .then((res) => {
+        if (!cancelled) setUser(res.user)
+      })
+      .catch(() => {
+        if (!cancelled) clear()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, setUser, clear])
+
+  return null
+}
+
 export default function App() {
   const online = useOnline()
 
   return (
     <>
+      <SessionBootstrap />
       <ScrollToTop />
       <OfflineBanner online={online} />
       <Routes>

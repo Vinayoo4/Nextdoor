@@ -18,11 +18,13 @@ router.post('/:id/members/:userId/role', requireAuth, circleController.updateMem
 router.get('/:id/members', requireAuth, circleController.listCircleMembers)
 router.put('/:id/pin', requireAuth, circleController.updateCirclePin)
 router.put('/:id', requireAuth, circleController.updateCircle)
+router.delete('/:id', requireAuth, circleController.deleteCircle)
 
 // Channel Management
 router.get('/:id/channels', requireAuth, circleController.listChannels)
 router.post('/:id/channels', requireAuth, circleController.createChannel)
 router.post('/channels/:id/verify-pin', requireAuth, circleController.verifyChannelPin)
 router.put('/channels/:id/pin', requireAuth, circleController.updateChannelPin)
+router.delete('/channels/:channelId/messages/:messageId', requireAuth, circleController.deleteMessage)
 
 export default router

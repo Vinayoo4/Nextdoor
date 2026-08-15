@@ -106,3 +106,26 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 export const logout = (_req: Request, res: Response) => {
   res.json({ ok: true })
 }
+
+const clerkSyncSchema = z.object({
+  email: z.string().email('Invalid email'),
+  name: z.string().optional(),
+})
+
+export const clerkSync = asyncHandler(async (req: Request, res: Response) => {
+  const { email, name } = parseBody(req, clerkSyncSchema)
+  const emailNorm = email.toLowerCase().trim()
+
+  let user = userRepository.findByEmail(emailNorm)
+  if (!user) {
+    user = userRepository.create({
+      email: emailNorm,
+      name: name || emailNorm.split('@')[0],
+      password_hash: '',
+    })
+  }
+
+  // Generate a standard JWT auth token for the app's local requests
+  const token = signToken({ userId: user.id, email: user.email, role: user.role })
+  res.json({ token, user: serializeUser(user) })
+})

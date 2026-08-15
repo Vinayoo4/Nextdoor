@@ -72,8 +72,17 @@ export default function CircleDetail() {
         setEditName(res.circle.name)
         setEditDescription(res.circle.description || '')
         
-        // If not protected by PIN, or already unlocked for the session, load channels
-        if (!res.circle.hasPin || isCircleUnlockedForSession) {
+        // If the user is not a member, stop loading here so the Join / Request Gate (CASE 1) displays.
+        if (!res.circle.isMember) {
+          setLoading(false)
+          return
+        }
+        
+        const isSystemAdmin = res.circle.role === 'admin' && useAuthStore.getState().user?.role === 'admin'
+        if (!res.circle.hasPin || isCircleUnlockedForSession || isSystemAdmin) {
+          if (isSystemAdmin) {
+            setIsCircleUnlockedForSession(true)
+          }
           loadChannels()
         } else {
           setLoading(false)
@@ -213,6 +222,30 @@ export default function CircleDetail() {
       setChannelPin('')
     } catch (err: any) {
       setChannelPinError(err.message || 'Invalid channel PIN')
+    }
+  }
+
+  async function handleDeleteMessage(messageId: string) {
+    if (!activeId) return
+    if (!window.confirm('Delete this message?')) return
+    try {
+      await circlesApi.deleteMessage(activeId, messageId)
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete message')
+    }
+  }
+
+  async function handleDeleteCircle() {
+    if (!id) return
+    if (!window.confirm('WARNING: Are you absolutely sure you want to permanently delete this circle? This action cannot be undone.')) return
+    try {
+      await circlesApi.deleteCircle(id)
+      alert('Circle deleted successfully!')
+      setShowManageModal(false)
+      window.location.href = '/circles'
+    } catch (err: any) {
+      setMgmtError(err.message || 'Failed to delete circle')
     }
   }
 
@@ -593,11 +626,23 @@ export default function CircleDetail() {
                 <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
                     <p className="text-xs font-bold text-slate-700">{m.author_name || m.authorName}</p>
-                    {m.expires_at && (
-                      <span className="text-[9px] text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0" title="Disappearing message">
-                        ⏱️ {getExpiresInLabel(m.expires_at)}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {m.expires_at && (
+                        <span className="text-[9px] text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0" title="Disappearing message">
+                          ⏱️ {getExpiresInLabel(m.expires_at)}
+                        </span>
+                      )}
+                      {(currentUser?.role === 'admin' || m.user_id === currentUser?.id) && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMessage(m.id)}
+                          className="text-slate-400 hover:text-red-500 text-[10px] font-bold p-0.5"
+                          title="Delete message"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {m.type === 'paste' ? (
                     <div className="mt-1 rounded-lg bg-slate-900 border border-slate-800 p-2.5 text-left min-w-[200px]">
@@ -663,7 +708,7 @@ export default function CircleDetail() {
 
       {/* Share Paste Modal Overlay */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl space-y-4 border border-slate-100">
             <div>
               <h3 className="text-base font-extrabold text-slate-800">Share Code Paste to Channel</h3>
@@ -763,7 +808,7 @@ export default function CircleDetail() {
 
       {/* Admin & Co-admin Panel Modal Drawer */}
       {showManageModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl border border-slate-150 space-y-5 my-8">
             <div className="flex justify-between items-start">
               <div>
@@ -878,6 +923,12 @@ export default function CircleDetail() {
               <div className="space-y-3 pt-2">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Group PIN Config</h4>
                 
+                {circle?.pin && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-xs font-semibold">
+                    🔑 <strong>Current Circle Passcode:</strong> {circle.pin}
+                  </div>
+                )}
+
                 {/* Circle PIN update */}
                 <div className="flex gap-2 items-end">
                   <div className="flex-1">
@@ -925,6 +976,18 @@ export default function CircleDetail() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {currentUser?.role === 'admin' && (
+              <div className="pt-4 border-t border-red-150 mt-4">
+                <button
+                  type="button"
+                  onClick={handleDeleteCircle}
+                  className="w-full bg-red-50 hover:bg-red-100 text-red-650 font-extrabold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all border border-red-200"
+                >
+                  🗑️ Permanent Delete Circle (Moderator Action)
+                </button>
               </div>
             )}
           </div>

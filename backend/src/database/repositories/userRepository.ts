@@ -64,10 +64,16 @@ export class UserRepository extends BaseRepository {
     const id = generateId()
     const timestamp = now()
     
+    const emailNorm = input.email.toLowerCase().trim()
+    let finalRole = input.role || 'user'
+    if (finalRole === 'admin' && emailNorm !== 'vinay_227051@saitm.org') {
+      finalRole = 'user'
+    }
+
     this.executeRun(
       `INSERT INTO ${this.table} (id, email, name, password_hash, role, locality_id, points, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.email.toLowerCase(), input.name, input.password_hash, input.role || 'user', input.locality_id || null, 0, timestamp, timestamp]
+      [id, emailNorm, input.name, input.password_hash, finalRole, input.locality_id || null, 0, timestamp, timestamp]
     )
     
     return this.findById(id)!
@@ -83,7 +89,14 @@ export class UserRepository extends BaseRepository {
     if (input.name !== undefined) { updates.push('name = ?'); params.push(input.name) }
     if (input.email !== undefined) { updates.push('email = ?'); params.push(input.email.toLowerCase()) }
     if (input.password_hash !== undefined) { updates.push('password_hash = ?'); params.push(input.password_hash) }
-    if (input.role !== undefined) { updates.push('role = ?'); params.push(input.role) }
+    if (input.role !== undefined) { 
+      let finalRole = input.role
+      if (finalRole === 'admin' && existing.email.toLowerCase().trim() !== 'vinay_227051@saitm.org') {
+        finalRole = existing.role
+      }
+      updates.push('role = ?'); 
+      params.push(finalRole) 
+    }
     if (input.locality_id !== undefined) { updates.push('locality_id = ?'); params.push(input.locality_id) }
     if (input.points !== undefined) { updates.push('points = ?'); params.push(input.points) }
 

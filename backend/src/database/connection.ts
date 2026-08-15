@@ -98,6 +98,17 @@ export function runMigrations(): void {
     console.error("Migration error circle_members roles:", e);
   }
 
+  try {
+    const businessesInfo = database.pragma("table_info(businesses)") as any[];
+    const hasPriority = businessesInfo.some((col: any) => col.name === 'priority');
+    if (!hasPriority && businessesInfo.length > 0) {
+      database.exec("ALTER TABLE businesses ADD COLUMN priority INTEGER DEFAULT 0;");
+      console.log("[db migration] Added priority column to businesses");
+    }
+  } catch (e) {
+    console.error("Migration error businesses priority:", e);
+  }
+
   const schema = getSchema()
   
   for (const statement of schema) {
@@ -109,6 +120,108 @@ export function runMigrations(): void {
     INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
     VALUES ('000000000000000000000000', 'guest@nextdoor.local', 'Guest User', 'guest_placeholder', 'user', 0, datetime('now'), datetime('now'))
   `).run()
+
+  // Ensure Super Admin exists if configured in env
+  if (env.superAdminEmail) {
+    const emailNorm = env.superAdminEmail.toLowerCase().trim()
+    database.prepare(`
+      INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+      VALUES ('super_admin_id', ?, 'Super Admin', '', 'admin', 0, datetime('now'), datetime('now'))
+    `).run(emailNorm)
+    console.log(`[db init] Verified/created Super Admin user with email: ${emailNorm}`)
+  }
+
+  // Ensure default emergency contacts exist
+  const emergencyCount = database.prepare("SELECT COUNT(*) as count FROM emergencies").get() as any
+  if (emergencyCount && emergencyCount.count === 0) {
+    const emergenciesList = [
+      { name: 'Police Helpline', type: 'Police', phone: '112', address: 'Central Police Station, Railway Chowk, Rewari', lat: 28.1975, lng: 76.6210 },
+      { name: 'Fire Station Rewari', type: 'Fire', phone: '101', address: 'Fire Station, Jhajjar Road, Rewari', lat: 28.1990, lng: 76.6275 },
+      { name: 'Ambulance & Trauma Center', type: 'Ambulance', phone: '102', address: 'Civil Hospital Trauma Center, Rewari', lat: 28.1889, lng: 76.6340 },
+      { name: 'Women Helpline', type: 'Women Help', phone: '1091', address: 'Women Police Station, Rewari', lat: 28.1960, lng: 76.6180 },
+      { name: 'NHAI Expressway Helpline', type: 'Highway Help', phone: '1033', address: 'NH-48 Corridor, Rewari Segment', lat: 28.2185, lng: 76.7780 }
+    ]
+    for (const e of emergenciesList) {
+      const id = Math.random().toString(36).substring(2, 15)
+      database.prepare(`
+        INSERT INTO emergencies (id, name, type, phone, address, location_lat, location_lng, city)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'Rewari')
+      `).run(id, e.name, e.type, e.phone, e.address, e.lat, e.lng)
+    }
+    console.log('[db init] Bootstrapped production emergency contacts')
+  }
+
+  // Ensure default landmarks, temples, and transit stands exist in buildings
+  const buildingsCount = database.prepare("SELECT COUNT(*) as count FROM buildings").get() as any
+  if (buildingsCount && buildingsCount.count === 0) {
+    const buildingsList = [
+      // Heritage
+      { name: 'Rewari Steam Locomotive Shed', type: 'heritage', address: 'Railway Colony, Rewari', timings: '9:00 AM - 5:00 PM', contact: '01274-256613', services: ['Museum', 'Guided Tours', 'Souvenirs'], description: 'Established in 1893, it is the only surviving steam locomotive shed in India. It houses some of India\'s oldest steam engines, including the legendary Fairy Queen.', lat: 28.1882, lng: 76.6231 },
+      { name: 'Rao Tej Singh Talaab (Bada Talaab)', type: 'heritage', address: 'Tej Singh Talaab, Rewari', timings: 'Open 24 hours', contact: '', services: ['Bathing Ghats', 'Historic Temple', 'Walkway'], description: 'Built in 1815 by Rao Tej Singh. It features separate bathing ghats for men and women and a beautiful historic temple structure surrounding the reservoir.', lat: 28.1963, lng: 76.6083 },
+      { name: 'Baoli Ghaus Ali Shah', type: 'heritage', address: 'Near Ghaus Ali Shah Masjid, Rewari', timings: '8:00 AM - 6:00 PM', contact: '', services: ['Stepwell Archeology', 'Rest rooms'], description: 'A historic three-storey stepwell constructed in the 18th century by Ghaus Ali Shah. It features an octagonal structure, restful rooms, and unique architectural archways.', lat: 28.2045, lng: 76.6110 },
+      { name: 'Rampura House', type: 'heritage', address: 'Rampura, Rewari', timings: 'Private property (external view)', contact: '', services: ['Historical Residence', 'Heritage Architecture'], description: 'The historic residence of the descendants of Rao Tula Ram (a prominent hero of the 1857 Indian Mutiny), showcasing a mix of Rajput and colonial architecture.', lat: 28.1906, lng: 76.6062 },
+      // Worship / Temples
+      { name: 'Ghanteshwar Mandir', type: 'worship', address: 'Main Bazar, Rewari', timings: '5:00 AM - 9:00 PM', contact: '', services: ['Daily Aarti', 'Festivals'], description: 'A famous historic temple in the heart of Rewari dedicated to Lord Shiva and other Hindu deities. Visited by thousands of devotees daily.', lat: 28.1948, lng: 76.6135 },
+      { name: 'Bhagwan Parshuram Mandir', type: 'worship', address: 'Model Town, Rewari', timings: '6:00 AM - 8:30 PM', contact: '', services: ['Religious Events', 'Community Hall'], description: 'A beautifully designed modern temple located in Model Town, dedicated to Lord Parshuram. Popular local landmark.', lat: 28.1895, lng: 76.6275 },
+      // Transit
+      { name: 'Rewari Junction Railway Station', type: 'transport', address: 'Station Road, Rewari', timings: 'Open 24 hours', contact: '01274-256612', services: ['8 Platforms', 'Waiting Rooms', 'Food stalls'], description: 'Major junction connecting Rewari to Delhi, Alwar, Rohtak, Bikaner, and Ringus. A historical junction established in 1873.', lat: 28.1983, lng: 76.6190 },
+      { name: 'Rewari Central Bus Stand', type: 'transport', address: 'Jhajjar Road, Rewari', timings: 'Open 24 hours', contact: '01274-254321', services: ['Haryana Roadways', 'Local Booking Office', 'Restrooms'], description: 'Haryana Roadways central terminal on Jhajjar Road. Regular buses to Gurugram, Delhi, Narnaul, Jhajjar, and Rohtak.', lat: 28.1985, lng: 76.6265 },
+      { name: 'Brass Market Auto Stand', type: 'transport', address: 'Brass Market Main Chowk, Rewari', timings: '6:00 AM - 10:00 PM', contact: '', services: ['E-Rickshaws', 'Sharing Autos'], description: 'Centrally located stand for E-Rickshaws and autos servicing Model Town, Sector 3, Brass Market, and nearby markets.', lat: 28.1892, lng: 76.6225 },
+      { name: 'Dharuhera Chauk Bypass Auto Stand', type: 'transport', address: 'Dharuhera Chauk Bypass, Rewari', timings: '6:00 AM - 9:00 PM', contact: '', services: ['Sharing Autos', 'Inter-city travel boarding'], description: 'Major intersection boarding point for local sharing autos towards Dharuhera industrial town, Bawal, and NH-48 bypass.', lat: 28.2048, lng: 76.6375 },
+      // Govt
+      { name: 'District & Sessions Court Rewari', type: 'govt', address: 'District Secretariat, Sector 1, Rewari', timings: '10:00 AM - 5:00 PM', contact: '01274-250001', services: ['Judicial services', 'Notary public', 'Advocate chambers'], description: 'Primary judicial court complex for Rewari district legal matters.', lat: 28.1920, lng: 76.6205 },
+      { name: 'Tehsil Office Rewari', type: 'govt', address: 'Old Court Road, Rewari', timings: '9:00 AM - 5:00 PM', contact: '01274-256617', services: ['Land Registration', 'Certificates', 'Citizen Helpdesk'], description: 'Government administrative department responsible for local land records and municipal documentation.', lat: 28.1955, lng: 76.6150 }
+    ]
+    for (const b of buildingsList) {
+      const id = Math.random().toString(36).substring(2, 15)
+      database.prepare(`
+        INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)
+      `).run(
+        id, b.name, b.type, b.address, b.timings, b.contact,
+        JSON.stringify(b.services), b.description, JSON.stringify([]),
+        b.lat, b.lng
+      )
+    }
+    console.log('[db init] Bootstrapped production landmarks, temples, transit hubs, and government buildings')
+  }
+
+  // Ensure Surrounding Forest and Wildlife Areas exist
+  const jhabuaExists = database.prepare("SELECT COUNT(*) as count FROM buildings WHERE name = 'Jhabua Reserve Forest & Wildlife Area'").get() as any
+  if (jhabuaExists && jhabuaExists.count === 0) {
+    const forests = [
+      { name: 'Jhabua Reserve Forest & Wildlife Area', type: 'heritage', address: 'Jhabua, Rewari Haryana', timings: 'Sunrise - Sunset', contact: '', services: ['Wildlife Spotting', 'Eco Trails', 'Nature Photography'], description: 'A protected forest reserve spanning several acres, housing regional wildlife (deer, peacocks, nilgai) and native arid vegetation of the Aravalli foothills.', lat: 28.0845, lng: 76.5820 },
+      { name: 'Masani Barrage Wetland & Forest Reserve', type: 'heritage', address: 'Masani Village, NH-48 Bypass, Rewari', timings: 'Open 24 hours', contact: '', services: ['Birdwatching', 'Wetland Conservations', 'Photography'], description: 'Located on the Sahibi River, this reserve forest and wetland area serves as a major ecological site for migratory birds and natural groundwater recharging.', lat: 28.2215, lng: 76.7125 }
+    ]
+    for (const f of forests) {
+      const id = Math.random().toString(36).substring(2, 15)
+      database.prepare(`
+        INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)
+      `).run(
+        id, f.name, f.type, f.address, f.timings, f.contact,
+        JSON.stringify(f.services), f.description, JSON.stringify([]),
+        f.lat, f.lng
+      )
+    }
+    console.log('[db init] Bootstrapped surrounding reserve forests and wildlife areas')
+  }
+
+  // Ensure SALTEDHASH and TRI businesses exist
+  const businessCount = database.prepare("SELECT COUNT(*) as count FROM businesses").get() as any
+  if (businessCount && businessCount.count === 0) {
+    const defaultBiz = [
+      { id: 'biz_saltedhash', name: 'SALTEDHASH', slug: 'saltedhash-site', category: 'Services', subcategory: 'Software Development', address: 'Model Town, Rewari', phone: '01274-999888', lat: 28.1915, lng: 76.6240, priority: 100, verified: 1 },
+      { id: 'biz_tri', name: 'TRIU', slug: 'triu-site', category: 'Services', subcategory: 'Business Consulting', address: 'Sector 3, Rewari', phone: '01274-888777', lat: 28.1960, lng: 76.6290, priority: 90, verified: 1 }
+    ]
+    for (const b of defaultBiz) {
+      database.prepare(`
+        INSERT INTO businesses (id, name, slug, category, subcategory, address, phone, verified, rating_avg, rating_count, status, location_lat, location_lng, priority)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?, ?)
+      `).run(b.id, b.name, b.slug, b.category, b.subcategory, b.address, b.phone, b.verified, b.lat, b.lng, b.priority)
+    }
+    console.log('[db init] Bootstrapped priority businesses: SALTEDHASH and TRI')
+  }
 }
 
 function getSchema(): string[] {

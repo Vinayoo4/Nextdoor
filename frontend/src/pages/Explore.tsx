@@ -1,119 +1,82 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Business, BusinessCategory } from '@/types'
-import { businessesApi } from '@/services/api'
+import type { Business, Building } from '@/types'
+import { businessesApi, buildingsApi } from '@/services/api'
 import MapView from '@/components/MapView'
 import { Spinner, ErrorBox } from '@/components/UI'
-import { CATEGORIES, categoryMeta } from '@/utils/categories'
 import { REWARI_CENTER } from '@/utils/format'
-
-// Static Heritage Monuments of Rewari
-const HERITAGE_PLACES = [
-  {
-    id: 'heritage_loco',
-    name: 'Rewari Steam Locomotive Shed',
-    category: 'Worship', // maps to heritage style
-    location: { lat: 28.1882, lng: 76.6231 },
-    timings: '9:00 AM - 5:00 PM',
-    description: 'Established in 1893, it is the only surviving steam locomotive shed in India. It houses some of India\'s oldest steam engines, including the legendary "Fairy Queen" (built in 1855).',
-    popup: `<div class="p-2"><strong>Steam Locomotive Shed</strong><br/><p class="text-xs mt-0.5">Oldest functional steam locomotives in the world.</p></div>`
-  },
-  {
-    id: 'heritage_talaab',
-    name: 'Rao Tej Singh Talaab (Bada Talaab)',
-    category: 'Worship',
-    location: { lat: 28.1963, lng: 76.6083 },
-    timings: 'Open 24 hours',
-    description: 'Built in 1815 by Rao Tej Singh. It features separate bathing ghats (steps) for men and women and a beautiful historic temple structure surrounding the reservoir.',
-    popup: `<div class="p-2"><strong>Rao Tej Singh Talaab</strong><br/><p class="text-xs mt-0.5">Historic water reservoir built in 1815.</p></div>`
-  },
-  {
-    id: 'heritage_baoli',
-    name: 'Baoli Ghaus Ali Shah',
-    category: 'Worship',
-    location: { lat: 28.2045, lng: 76.6110 },
-    timings: '8:00 AM - 6:00 PM',
-    description: 'A historic three-storey stepwell constructed in the 18th century by Ghaus Ali Shah. It features an octagonal structure, restful rooms, and unique architectural archways.',
-    popup: `<div class="p-2"><strong>Baoli Ghaus Ali Shah</strong><br/><p class="text-xs mt-0.5">18th century stepwell architectural wonder.</p></div>`
-  },
-  {
-    id: 'heritage_house',
-    name: 'Rampura House',
-    category: 'Worship',
-    location: { lat: 28.1906, lng: 76.6062 },
-    timings: 'Private property (external view)',
-    description: 'The historic residence of the descendants of Rao Tula Ram (a prominent hero of the 1857 Indian Mutiny), showcasing a mix of Rajput and colonial architecture.',
-    popup: `<div class="p-2"><strong>Rampura House</strong><br/><p class="text-xs mt-0.5">Historic residency of Rao Tula Ram family.</p></div>`
-  }
-]
-
-// Static Transport Stands of Rewari
-const TRANSIT_PLACES = [
-  {
-    id: 'transit_rail',
-    name: 'Rewari Junction Railway Station',
-    type: 'Railway Station',
-    location: { lat: 28.1983, lng: 76.6190 },
-    platforms: 8,
-    details: 'Major junction connecting Rewari to Delhi, Alwar, Rohtak, Bikaner, and Ringus. A historical junction established in 1873.',
-    popup: `<div class="p-2"><strong>Rewari Junction Railway Station</strong><br/><p class="text-xs mt-0.5">Main trains board point.</p></div>`
-  },
-  {
-    id: 'transit_bus',
-    name: 'Rewari Central Bus Stand',
-    type: 'Bus Stand',
-    location: { lat: 28.1985, lng: 76.6265 },
-    platforms: 'Multi-bay',
-    details: 'Haryana Roadways central terminal on Jhajjar Road. Regular buses to Gurugram, Delhi (ISBT), Narnaul, Jhajjar, and Rohtak.',
-    popup: `<div class="p-2"><strong>Central Bus Stand</strong><br/><p class="text-xs mt-0.5">Haryana Roadways bus terminal.</p></div>`
-  },
-  {
-    id: 'transit_auto_brass',
-    name: 'Brass Market Auto Stand',
-    type: 'Local Auto Stand',
-    location: { lat: 28.1892, lng: 76.6225 },
-    platforms: 'Local E-Rickshaw/Auto',
-    details: 'Centrally located stand for E-Rickshaws and autos servicing Model Town, Sector 3, Brass Market, and nearby markets.',
-    popup: `<div class="p-2"><strong>Brass Market Auto Stand</strong><br/><p class="text-xs mt-0.5">E-rickshaws and sharing auto stands.</p></div>`
-  },
-  {
-    id: 'transit_auto_chauk',
-    name: 'Dharuhera Chauk Bypass Auto Stand',
-    type: 'Bypass Auto Stand',
-    location: { lat: 28.2048, lng: 76.6375 },
-    platforms: 'Sharing Autos',
-    details: 'Major intersection boarding point for local sharing autos towards Dharuhera industrial town, Bawal, and NH-48 bypass.',
-    popup: `<div class="p-2"><strong>Dharuhera Chauk Auto Stand</strong><br/><p class="text-xs mt-0.5">Boarding point for Dharuhera/Bawal.</p></div>`
-  }
-]
+import { useAuthStore } from '@/stores/auth'
 
 export default function Explore() {
+  const currentUser = useAuthStore((s) => s.user)
+
   const [activeTab, setActiveTab] = useState<'map' | 'heritage' | 'transit'>('map')
-  const [category, setCategory] = useState<BusinessCategory | 'All'>('All')
+  
+  // Datasets from backend
   const [businesses, setBusinesses] = useState<Business[]>([])
+  const [buildings, setBuildings] = useState<Building[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   // Map settings
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(REWARI_CENTER)
   const [mapPoints, setMapPoints] = useState<any[]>([])
+  const [focusedPointId, setFocusedPointId] = useState<string | undefined>(undefined)
 
+  // Super Admin Add/Edit State
+  const [showAddBuilding, setShowAddBuilding] = useState(false)
+  const [editingBuildingId, setEditingBuildingId] = useState<string | null>(null)
+  const [bName, setBName] = useState('')
+  const [bType, setBType] = useState<'govt' | 'hospital' | 'heritage' | 'transport' | 'emergency' | 'banking' | 'education' | 'worship'>('heritage')
+  const [bAddress, setBAddress] = useState('')
+  const [bTimings, setBTimings] = useState('')
+  const [bContact, setBContact] = useState('')
+  const [bDescription, setBDescription] = useState('')
+  const [bLat, setBLat] = useState(28.1928)
+  const [bLng, setBLng] = useState(76.6186)
+  const [bServices, setBServices] = useState('')
+  const [savingBuilding, setSavingBuilding] = useState(false)
+
+  // 1. Fetch businesses on Places tab
   useEffect(() => {
     if (activeTab !== 'map') return
     setLoading(true)
-    const params: Record<string, string> = { limit: '60' }
-    if (category !== 'All') params.category = category
     businessesApi
-      .list(params)
+      .list({ limit: '100' })
       .then((res) => {
-        setBusinesses(res.businesses)
+        // Filter: ONLY show SALTEDHASH and TRIU businesses
+        const filtered = res.businesses.filter(
+          (b) => b.name === 'SALTEDHASH' || b.name === 'TRIU'
+        )
+        // Sort by priority rank
+        filtered.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+        setBusinesses(filtered)
         setError('')
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load places'))
       .finally(() => setLoading(false))
-  }, [category, activeTab])
+  }, [activeTab])
 
-  // Sync points when active tab changes
+  // 2. Fetch landmarks/transit stands
+  const loadBuildings = () => {
+    setLoading(true)
+    buildingsApi
+      .list()
+      .then((res) => {
+        setBuildings(res.buildings)
+        setError('')
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load landmarks'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === 'heritage' || activeTab === 'transit') {
+      loadBuildings()
+    }
+  }, [activeTab])
+
+  // 3. Sync map points when active tab or datasets change
   useEffect(() => {
     if (activeTab === 'map') {
       const pts = businesses.filter((b) => b.location).map((b) => ({
@@ -126,30 +89,138 @@ export default function Explore() {
       setMapPoints(pts)
       setMapCenter(REWARI_CENTER)
     } else if (activeTab === 'heritage') {
-      setMapPoints(HERITAGE_PLACES)
-      setMapCenter({ lat: 28.1963, lng: 76.6120 }) // center slightly around sites
-    } else if (activeTab === 'transit') {
-      const pts = TRANSIT_PLACES.map((t) => ({
-        id: t.id,
-        name: t.name,
-        category: 'Services',
-        location: t.location,
-        popup: t.popup
+      const heritageList = buildings.filter(b => b.type === 'heritage' || b.type === 'worship')
+      const pts = heritageList.filter(b => b.location).map((b) => ({
+        id: b.id,
+        name: b.name,
+        category: b.type === 'worship' ? 'Worship' : 'Services',
+        location: b.location!,
+        popup: `<div class="p-2"><strong>${b.name}</strong><br/><p class="text-xs mt-0.5">${b.description || ''}</p></div>`
       }))
       setMapPoints(pts)
-      setMapCenter({ lat: 28.1970, lng: 76.6220 })
+      if (pts.length > 0) {
+        setMapCenter(pts[0].location)
+      } else {
+        setMapCenter({ lat: 28.1963, lng: 76.6120 })
+      }
+    } else if (activeTab === 'transit') {
+      const transitList = buildings.filter(b => b.type === 'transport')
+      const pts = transitList.filter(b => b.location).map((b) => ({
+        id: b.id,
+        name: b.name,
+        category: 'Transport',
+        location: b.location!,
+        popup: `<div class="p-2"><strong>${b.name}</strong><br/><p class="text-xs mt-0.5">${b.description || ''}</p></div>`
+      }))
+      setMapPoints(pts)
+      if (pts.length > 0) {
+        setMapCenter(pts[0].location)
+      } else {
+        setMapCenter({ lat: 28.1970, lng: 76.6220 })
+      }
     }
-  }, [activeTab, businesses])
+  }, [activeTab, businesses, buildings])
 
-  function handleCenterPlace(lat: number, lng: number) {
+  function handleCenterPlace(id: string, lat: number, lng: number) {
     setMapCenter({ lat, lng })
+    setFocusedPointId(id)
   }
+
+  // Super Admin CRUD functions
+  async function handleSaveBuilding(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingBuilding(true)
+    const servicesArr = bServices.split(',').map((s) => s.trim()).filter(Boolean)
+    const payload = {
+      name: bName.trim(),
+      type: bType,
+      address: bAddress.trim(),
+      timings: bTimings.trim() || null,
+      contact: bContact.trim() || null,
+      description: bDescription.trim() || null,
+      location_lat: Number(bLat),
+      location_lng: Number(bLng),
+      services: servicesArr
+    }
+
+    try {
+      if (editingBuildingId) {
+        await buildingsApi.update(editingBuildingId, payload)
+        alert('Landmark updated successfully!')
+      } else {
+        await buildingsApi.create(payload)
+        alert('Landmark added successfully!')
+      }
+      setShowAddBuilding(false)
+      setEditingBuildingId(null)
+      clearBuildingForm()
+      loadBuildings()
+    } catch (err: any) {
+      alert(err.message || 'Failed to save landmark')
+    } finally {
+      setSavingBuilding(false)
+    }
+  }
+
+  function handleEditBuildingClick(b: Building) {
+    setEditingBuildingId(b.id)
+    setBName(b.name)
+    setBType(b.type as any)
+    setBAddress(b.address || '')
+    setBTimings(b.timings || '')
+    setBContact(b.contact || '')
+    setBDescription(b.description || '')
+    setBLat(b.location?.lat ?? 28.1928)
+    setBLng(b.location?.lng ?? 76.6186)
+    setBServices(Array.isArray(b.services) ? b.services.join(', ') : '')
+    setShowAddBuilding(true)
+  }
+
+  async function handleDeleteBuilding(buildingId: string) {
+    if (!window.confirm('Are you sure you want to permanently delete this landmark?')) return
+    try {
+      await buildingsApi.delete(buildingId)
+      alert('Landmark deleted successfully!')
+      loadBuildings()
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete landmark')
+    }
+  }
+
+  function clearBuildingForm() {
+    setBName('')
+    setBAddress('')
+    setBTimings('')
+    setBContact('')
+    setBDescription('')
+    setBLat(28.1928)
+    setBLng(76.6186)
+    setBServices('')
+  }
+
+  const heritageList = buildings.filter((b) => b.type === 'heritage' || b.type === 'worship')
+  const transitList = buildings.filter((b) => b.type === 'transport')
 
   return (
     <div className="px-4 pt-4 space-y-4 pb-12">
-      <div>
-        <h1 className="text-xl font-bold">Explore Rewari</h1>
-        <p className="mt-0.5 text-sm text-slate-500 font-medium">History, heritage, and transportation stands in the city</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-xl font-bold">Explore Rewari</h1>
+          <p className="mt-0.5 text-sm text-slate-500 font-medium">History, heritage, and transportation stands in the city</p>
+        </div>
+        {currentUser?.role === 'admin' && (activeTab === 'heritage' || activeTab === 'transit') && (
+          <button
+            onClick={() => {
+              setEditingBuildingId(null);
+              clearBuildingForm();
+              setBType(activeTab === 'transit' ? 'transport' : 'heritage');
+              setShowAddBuilding(true);
+            }}
+            className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg"
+          >
+            + Add Location
+          </button>
+        )}
       </div>
 
       {/* Explorer Tabs */}
@@ -174,13 +245,14 @@ export default function Explore() {
         </button>
       </div>
 
-      {/* Map Segment (Shared for context visual) */}
+      {/* Map Segment */}
       <div className="card !p-1 border border-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm">
         <MapView
           points={mapPoints}
           center={mapCenter}
           zoom={13}
           className="h-[280px] w-full"
+          selectedPointId={focusedPointId}
         />
         <p className="text-[10px] text-slate-400 text-center py-1 bg-slate-50">
           Showing {mapPoints.length} locations on Rewari City map
@@ -190,39 +262,42 @@ export default function Explore() {
       {/* Tab contents */}
       {activeTab === 'map' && (
         <div className="space-y-4">
-          <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            <button
-              onClick={() => setCategory('All')}
-              className={`chip shrink-0 border ${category === 'All' ? 'border-primary bg-primary text-white font-bold' : 'border-slate-200 bg-white text-slate-600'}`}
-            >
-              All
-            </button>
-            {CATEGORIES.map((c) => {
-              const active = category === c.value
-              const meta = categoryMeta(c.value)
-              return (
-                <button
-                  key={c.value}
-                  onClick={() => setCategory(c.value)}
-                  className={`chip shrink-0 border ${
-                    active ? 'border-primary bg-primary text-white' : `${meta.bg} ${meta.text} border ${meta.border}`
-                  }`}
-                >
-                  {c.emoji} {c.label}
-                </button>
-              )
-            })}
-          </div>
-
           {loading ? (
             <Spinner />
           ) : error ? (
             <ErrorBox message={error} />
           ) : (
-            <div className="space-y-2">
-              <Link to="/businesses" className="btn-outline w-full text-xs font-semibold py-2.5 rounded-lg flex items-center justify-center gap-1">
-                Browse Full Place Directory →
-              </Link>
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Prioritized Local Entities</h3>
+              {businesses.map((b) => (
+                <div key={b.id} className="card p-3 border border-indigo-50/60 bg-indigo-50/5 flex justify-between items-center">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-extrabold text-sm text-slate-800">{b.name}</h4>
+                      {b.verified && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.2 rounded-full font-bold">✓ Verified</span>}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">📍 {b.address}</p>
+                    <p className="text-[10px] text-slate-400">Category: {b.category} · Priority Rank: {b.priority ?? 0}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => b.location && handleCenterPlace(b.id, b.location.lat, b.location.lng)}
+                      className="text-[10px] bg-indigo-50 text-primary font-bold px-2.5 py-1.5 rounded-lg hover:bg-indigo-100"
+                    >
+                      📍 Show on Map
+                    </button>
+                    <Link
+                      to={`/businesses/${b.slug}`}
+                      className="text-[10px] bg-primary text-white font-bold px-2.5 py-1.5 rounded-lg hover:bg-indigo-750"
+                    >
+                      View Details →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              {businesses.length === 0 && (
+                <p className="text-xs text-slate-450 italic text-center py-6 bg-slate-50 rounded-xl">No active listings seeded yet.</p>
+              )}
             </div>
           )}
         </div>
@@ -231,8 +306,8 @@ export default function Explore() {
       {activeTab === 'heritage' && (
         <div className="space-y-5">
           {/* Rewari History Column */}
-          <div className="card bg-indigo-50/50 border border-indigo-100 p-4 space-y-2">
-            <h3 className="text-sm font-extrabold text-indigo-900 flex items-center gap-1">
+          <div className="card bg-indigo-50/30 border border-indigo-100 p-4 space-y-2">
+            <h3 className="text-sm font-extrabold text-indigo-905 flex items-center gap-1">
               📜 The History of Rewari City
             </h3>
             <p className="text-xs text-indigo-950 leading-relaxed font-normal">
@@ -245,73 +320,283 @@ export default function Explore() {
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider text-[10px] text-slate-500">Historical & Heritage Monuments</h3>
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Historical & Heritage Monuments ({heritageList.length})</h3>
             
-            {HERITAGE_PLACES.map((h) => (
+            {loading ? (
+              <Spinner />
+            ) : heritageList.map((h) => (
               <div key={h.id} className="card bg-white border border-slate-100 p-4 space-y-2.5 transition hover:shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="text-sm font-extrabold text-slate-800">{h.name}</h4>
-                    <span className="text-[10px] bg-slate-100 text-slate-500 py-0.5 px-2 rounded-full font-semibold mt-1 inline-block">⏱️ Timings: {h.timings}</span>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-extrabold text-slate-800">{h.name}</h4>
+                      <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full capitalize font-semibold">{h.type}</span>
+                    </div>
+                    {h.timings && <span className="text-[10px] bg-slate-100 text-slate-500 py-0.5 px-2 rounded-full font-semibold mt-1.5 inline-block">⏱️ Timings: {h.timings}</span>}
                   </div>
-                  <button
-                    onClick={() => handleCenterPlace(h.location.lat, h.location.lng)}
-                    className="text-[10px] bg-primary text-white py-1 px-2.5 rounded font-bold hover:bg-indigo-750 shrink-0"
-                  >
-                    📍 Show on Map
-                  </button>
+                  <div className="flex gap-2 shrink-0">
+                    {currentUser?.role === 'admin' && (
+                      <>
+                        <button
+                          onClick={() => handleEditBuildingClick(h)}
+                          className="text-[10px] bg-slate-100 text-slate-600 py-1 px-2 rounded hover:bg-slate-200"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBuilding(h.id)}
+                          className="text-[10px] bg-red-50 text-red-650 py-1 px-2 rounded hover:bg-red-100"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => h.location && handleCenterPlace(h.id, h.location.lat, h.location.lng)}
+                      className="text-[10px] bg-primary text-white py-1 px-2.5 rounded font-bold hover:bg-indigo-750"
+                    >
+                      📍 Show on Map
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed font-normal">{h.description}</p>
                 <div className="flex gap-2 justify-end pt-1">
-                  <Link
-                    to={`/navigate?lat=${h.location.lat}&lng=${h.location.lng}&name=${encodeURIComponent(h.name)}`}
-                    className="text-xs font-bold text-primary flex items-center gap-0.5 hover:underline"
-                  >
-                    🚀 Navigate Offline
-                  </Link>
+                  {h.location && (
+                    <Link
+                      to={`/navigate?lat=${h.location.lat}&lng=${h.location.lng}&name=${encodeURIComponent(h.name)}`}
+                      className="text-xs font-bold text-primary flex items-center gap-0.5 hover:underline"
+                    >
+                      🚀 Navigate Offline
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
+            {!loading && heritageList.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-6">No historical landmarks listed yet.</p>
+            )}
           </div>
         </div>
       )}
 
       {activeTab === 'transit' && (
         <div className="space-y-4">
-          <div className="card bg-amber-50/50 border border-amber-200/50 p-4 space-y-1">
+          <div className="card bg-amber-50/20 border border-amber-100 p-4 space-y-1">
             <h3 className="text-sm font-extrabold text-amber-800">🚌 Local Transit Stands</h3>
-            <p className="text-xs text-amber-900 leading-relaxed">
+            <p className="text-xs text-amber-905 leading-relaxed">
               Find main boarding gates and stands to travel in and around Rewari easily via bus, train, or sharing auto services.
             </p>
           </div>
 
           <div className="space-y-3">
-            {TRANSIT_PLACES.map((t) => (
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Transit Connections ({transitList.length})</h3>
+            {loading ? (
+              <Spinner />
+            ) : transitList.map((t) => (
               <div key={t.id} className="card bg-white border border-slate-100 p-4 space-y-2 transition hover:shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="chip bg-indigo-50 text-primary text-[9px] font-bold py-0.5 px-2 rounded uppercase">{t.type}</span>
+                    <span className="chip bg-indigo-50 text-primary text-[9px] font-bold py-0.5 px-2 rounded uppercase">Transit</span>
                     <h4 className="text-sm font-extrabold text-slate-850 mt-1">{t.name}</h4>
                   </div>
-                  <button
-                    onClick={() => handleCenterPlace(t.location.lat, t.location.lng)}
-                    className="text-[10px] bg-primary text-white py-1 px-2.5 rounded font-bold hover:bg-indigo-750 shrink-0"
-                  >
-                    📍 Show on Map
-                  </button>
+                  <div className="flex gap-2 shrink-0">
+                    {currentUser?.role === 'admin' && (
+                      <>
+                        <button
+                          onClick={() => handleEditBuildingClick(t)}
+                          className="text-[10px] bg-slate-100 text-slate-600 py-1 px-2 rounded hover:bg-slate-200"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBuilding(t.id)}
+                          className="text-[10px] bg-red-50 text-red-650 py-1 px-2 rounded hover:bg-red-100"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => t.location && handleCenterPlace(t.id, t.location.lat, t.location.lng)}
+                      className="text-[10px] bg-primary text-white py-1 px-2.5 rounded font-bold hover:bg-indigo-750"
+                    >
+                      📍 Show on Map
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 font-semibold text-[11px]">Boarding / Platform Info: {t.platforms}</p>
-                <p className="text-xs text-slate-600 leading-relaxed font-normal mt-1">{t.details}</p>
+                {t.timings && <p className="text-xs text-slate-500 font-semibold text-[11px]">Services: {t.timings}</p>}
+                <p className="text-xs text-slate-600 leading-relaxed font-normal mt-1">{t.description}</p>
                 <div className="flex justify-end pt-1">
-                  <Link
-                    to={`/navigate?lat=${t.location.lat}&lng=${t.location.lng}&name=${encodeURIComponent(t.name)}`}
-                    className="text-xs font-bold text-primary flex items-center gap-0.5 hover:underline"
-                  >
-                    🚀 Navigate Offline
-                  </Link>
+                  {t.location && (
+                    <Link
+                      to={`/navigate?lat=${t.location.lat}&lng=${t.location.lng}&name=${encodeURIComponent(t.name)}`}
+                      className="text-xs font-bold text-primary flex items-center gap-0.5 hover:underline"
+                    >
+                      🚀 Navigate Offline
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
+            {!loading && transitList.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-6">No transit connections listed yet.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Landmark Modal */}
+      {showAddBuilding && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-slate-150 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-800">
+                  {editingBuildingId ? '⚙️ Edit Landmark' : '🏛️ Add Landmark / Transit Stand'}
+                </h3>
+                <p className="text-[10px] text-slate-500">Add civic coordinates, timings, and desc for the city guide.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddBuilding(false);
+                  setEditingBuildingId(null);
+                  clearBuildingForm();
+                }}
+                className="text-slate-400 hover:text-slate-700 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBuilding} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Name</label>
+                  <input
+                    type="text"
+                    value={bName}
+                    onChange={(e) => setBName(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Type</label>
+                  <select
+                    value={bType}
+                    onChange={(e) => setBType(e.target.value as any)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
+                    required
+                  >
+                    <option value="heritage">Heritage landmark</option>
+                    <option value="worship">Temple / Worship place</option>
+                    <option value="transport">Transit terminal / Stand</option>
+                    <option value="govt">Government department</option>
+                    <option value="hospital">Hospital / Emergency clinic</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Address</label>
+                <input
+                  type="text"
+                  value={bAddress}
+                  onChange={(e) => setBAddress(e.target.value)}
+                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Timings / Service Info</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 9:00 AM - 5:00 PM"
+                    value={bTimings}
+                    onChange={(e) => setBTimings(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Contact Number</label>
+                  <input
+                    type="text"
+                    value={bContact}
+                    onChange={(e) => setBContact(e.target.value)}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Latitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={bLat}
+                    onChange={(e) => setBLat(Number(e.target.value))}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Longitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={bLng}
+                    onChange={(e) => setBLng(Number(e.target.value))}
+                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Description</label>
+                <textarea
+                  value={bDescription}
+                  onChange={(e) => setBDescription(e.target.value)}
+                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary min-h-16 bg-white text-slate-800"
+                  maxLength={500}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Services / Features (comma-separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Museum, Parking, Restrooms"
+                  value={bServices}
+                  onChange={(e) => setBServices(e.target.value)}
+                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <button
+                  type="submit"
+                  disabled={savingBuilding}
+                  className="flex-1 btn-primary text-xs py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg"
+                >
+                  {savingBuilding ? 'Saving...' : 'Save Details'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddBuilding(false);
+                    setEditingBuildingId(null);
+                    clearBuildingForm();
+                  }}
+                  className="btn btn-outline text-xs py-2 px-4 border border-slate-200 hover:bg-slate-50 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

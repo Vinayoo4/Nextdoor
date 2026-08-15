@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
+import { APP_CONFIG } from '@/config'
 
 const FEATURES = [
   {
@@ -51,7 +52,7 @@ export default function Landing() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             {token ? (
               <Link to="/home" className="btn-accent px-8">
-                Open Nextdoor →
+                Open {APP_CONFIG.appName} →
               </Link>
             ) : (
               <>
@@ -93,7 +94,7 @@ export default function Landing() {
       </section>
 
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        © {new Date().getFullYear()} Nextdoor · Built for Rewari first
+        © {new Date().getFullYear()} {APP_CONFIG.appName} · Built for Rewari first
       </footer>
     </div>
   )

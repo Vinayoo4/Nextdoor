@@ -36,6 +36,7 @@ export interface Business {
   status: 'active' | 'pending' | 'suspended'
   description: string | null
   location: LatLng | null
+  priority?: number
   createdAt: string
 }
 

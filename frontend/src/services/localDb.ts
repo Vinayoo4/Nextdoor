@@ -112,6 +112,16 @@ export const localDb = {
     await db.delete('notes', id)
   },
 
+  async deletePost(id: string): Promise<void> {
+    const db = await getDB()
+    await db.delete('posts', id)
+  },
+
+  async deleteMessage(id: string): Promise<void> {
+    const db = await getDB()
+    await db.delete('messages', id)
+  },
+
   // Locked/Unlocked Checks (Stored locally)
   async isCircleUnlocked(circleId: string): Promise<boolean> {
     const db = await getDB()

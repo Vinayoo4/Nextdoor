@@ -1,8 +1,9 @@
 import { useAuthStore } from '@/stores/auth'
 import { cacheGet, cacheSet, cacheKey } from './offlineCache'
+import { APP_CONFIG } from '@/config'
 import type { BusinessListResponse, CircleListResponse } from '@/types'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? ''
+const API_BASE = APP_CONFIG.apiUrl
 
 interface RequestOptions {
   method?: string
@@ -106,6 +107,8 @@ export const businessesApi = {
     verificationNote?: string
     evidenceReference?: string
   }) => api.post<{ message: string; request: any }>(`/api/businesses/${id}/claim`, data),
+  update: (id: string, data: Record<string, unknown>) => api.patch<{ business: import('@/types').Business }>(`/api/businesses/${id}`, data),
+  delete: (id: string) => api.del<{ ok: boolean }>(`/api/businesses/${id}`),
 }
 
 export const postsApi = {
@@ -115,6 +118,7 @@ export const postsApi = {
   },
   create: (content: string, lat?: number, lng?: number) =>
     api.post<{ post: import('@/types').Post }>('/api/posts', { content, lat, lng }),
+  delete: (id: string) => api.del<{ ok: boolean }>(`/api/posts/${id}`),
 }
 
 export const circlesApi = {
@@ -146,6 +150,10 @@ export const circlesApi = {
     api.post<{ ok: boolean }>(`/api/circles/channels/${channelId}/verify-pin`, { pin }),
   updateChannelPin: (channelId: string, pin: string) =>
     api.put<{ ok: boolean }>(`/api/circles/channels/${channelId}/pin`, { pin }),
+  deleteCircle: (circleId: string) =>
+    api.del<{ ok: boolean }>(`/api/circles/${circleId}`),
+  deleteMessage: (channelId: string, messageId: string) =>
+    api.del<{ ok: boolean }>(`/api/circles/channels/${channelId}/messages/${messageId}`),
 }
 
 export const messagesApi = {
@@ -163,7 +171,16 @@ export const emergencyApi = {
 }
 
 export const buildingsApi = {
-  list: () => api.get<{ buildings: import('@/types').Building[] }>('/api/buildings', { useCache: true }),
+  list: (type?: string) => {
+    const query = type ? `?type=${type}` : ''
+    return api.get<{ buildings: import('@/types').Building[] }>(`/api/buildings${query}`)
+  },
+  create: (data: Record<string, unknown>) =>
+    api.post<{ building: import('@/types').Building }>('/api/buildings', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put<{ building: import('@/types').Building }>(`/api/buildings/${id}`, data),
+  delete: (id: string) =>
+    api.del<{ ok: boolean }>(`/api/buildings/${id}`),
 }
 
 export const waitlistApi = {
