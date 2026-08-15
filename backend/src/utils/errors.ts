@@ -21,19 +21,34 @@ export function notFoundHandler(req: Request, _res: Response, next: NextFunction
   next(new ApiError(404, `Route not found: ${req.method} ${req.originalUrl}`))
 }
 
-export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
+  const requestId = (req as any).id || 'unknown'
+  let status = 500
+  let message = 'Internal server error'
+  let code = 'INTERNAL_SERVER_ERROR'
+
   if (err instanceof ApiError) {
-    return res.status(err.status).json({ error: err.message })
+    status = err.status
+    message = err.message
+    code = status === 400 ? 'BAD_REQUEST'
+         : status === 401 ? 'UNAUTHORIZED'
+         : status === 403 ? 'FORBIDDEN'
+         : status === 404 ? 'NOT_FOUND'
+         : status === 429 ? 'TOO_MANY_REQUESTS'
+         : 'API_ERROR'
+  } else if (err.name === 'ValidationError' || err.name === 'CastError') {
+    status = 400
+    message = err.message || 'Validation error'
+    code = 'BAD_REQUEST'
+  } else {
+    console.error(`[error] [Request ID: ${requestId}]`, err)
   }
-  if (err instanceof Error && err.name === 'CastError') {
-    return res.status(400).json({ error: 'Invalid id format' })
-  }
-  if (err instanceof Error && err.name === 'ValidationError') {
-    return res.status(400).json({ error: err.message })
-  }
-  if (err instanceof Error && 'code' in err && (err as { code?: number }).code === 11000) {
-    return res.status(409).json({ error: 'A record with that value already exists' })
-  }
-  console.error('[error]', err)
-  return res.status(500).json({ error: 'Internal server error' })
+
+  return res.status(status).json({
+    error: {
+      code,
+      message,
+      requestId
+    }
+  })
 }

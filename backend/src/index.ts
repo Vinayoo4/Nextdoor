@@ -4,16 +4,37 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import fs from 'node:fs'
-import { runMigrations } from './database/connection'
+import pinoHttp from 'pino-http'
+import { randomUUID } from 'node:crypto'
+import { runMigrations, getDatabase } from './database/connection'
 import { env } from './config/env'
 import routes from './routes'
 import { errorHandler, notFoundHandler } from './utils/errors'
 
 const app = express()
 
+// Structured logging with pino-http
+const logger = pinoHttp({
+  level: env.nodeEnv === 'production' ? 'info' : 'debug',
+  autoLogging: {
+    ignore: (req) => req.url === '/api/health'
+  }
+})
+
+app.use(logger)
 app.use(helmet())
 app.use(cors({ origin: env.corsOrigin, credentials: false }))
 app.use(express.json({ limit: '2mb' }))
+
+// Request ID middleware
+app.use((req, res, next) => {
+  const reqId = req.headers['x-request-id'] || randomUUID()
+  ;(req as any).id = reqId
+  res.setHeader('x-request-id', reqId)
+  next()
+})
+
+// Global Rate Limiter
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -23,7 +44,31 @@ app.use(
   })
 )
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }))
+// Strict Rate Limiter for Authentication and Mutation requests
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30, // Max 30 writes/mutations per minute per IP
+  message: { error: 'Too many mutation requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET' && req.path !== '/health') {
+    return writeLimiter(req, res, next)
+  }
+  next()
+})
+
+app.get('/api/health', (_req, res) => {
+  try {
+    const db = getDatabase()
+    db.prepare('SELECT 1').get()
+    return res.json({ ok: true, database: 'connected' })
+  } catch (err: any) {
+    return res.status(500).json({ ok: false, error: err.message })
+  }
+})
 app.use('/api', routes)
 app.use(notFoundHandler)
 app.use(errorHandler)

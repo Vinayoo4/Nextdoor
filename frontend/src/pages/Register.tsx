@@ -118,9 +118,6 @@ export default function Register() {
               </p>
             )}
 
-            {/* Clerk bot-protection CAPTCHA widget (must exist before signUp.create()) */}
-            <div id="clerk-captcha" />
-
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Sending OTP…' : 'Continue'}
             </button>
@@ -169,6 +166,8 @@ export default function Register() {
             </button>
           </form>
         )}
+        {/* Clerk bot-protection CAPTCHA widget (must exist in DOM at all times) */}
+        <div id="clerk-captcha" />
       </div>
 
       <p className="mt-6 text-sm text-slate-600">

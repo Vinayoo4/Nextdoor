@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nextdoor_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: nextdoor
+      POSTGRES_USER: nextdoor_admin
+      POSTGRES_PASSWORD: secure_postgres_pass_987
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextdoor_admin -d nextdoor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: nextdoor_backend
+    restart: always
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://nextdoor_admin:secure_postgres_pass_987@postgres:5432/nextdoor
+      CORS_ORIGIN: "http://localhost"
+      CLERK_PUBLISHABLE_KEY: pk_test_cG9ldGljLWthdHlkaWQtMjEuY2xlcmsuYWNjb3VudHMuZGV2JA
+      CLERK_SECRET_KEY: sk_test_41234567890abcdef
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: nextdoor_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

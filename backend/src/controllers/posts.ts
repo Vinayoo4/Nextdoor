@@ -28,14 +28,27 @@ const listPostsSchema = z.object({
 })
 
 export const listPosts = asyncHandler(async (req: Request, res: Response) => {
-  const { lat, lng, radius } = listPostsSchema.parse(req.query)
+  const { lat, lng, radius, limit = 20, cursor } = listPostsSchema.parse(req.query)
 
-  // Use location filtering from in-memory transientStore
-  const postsList = transientStore.getPosts(lat, lng, radius ?? 5)
+  let postsList = transientStore.getPosts(lat, lng, radius ?? 5)
+
+  // Sort posts by created_at descending
+  postsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  let startIndex = 0
+  if (cursor) {
+    const idx = postsList.findIndex(p => p.id === cursor)
+    if (idx !== -1) {
+      startIndex = idx + 1
+    }
+  }
+
+  const paginatedPosts = postsList.slice(startIndex, startIndex + limit)
+  const nextCursor = paginatedPosts.length === limit ? paginatedPosts[paginatedPosts.length - 1].id : null
 
   res.json({
-    posts: postsList,
-    nextCursor: null
+    posts: paginatedPosts,
+    nextCursor
   })
 })
 

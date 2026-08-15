@@ -16,9 +16,6 @@ function getDB() {
           const store = db.createObjectStore('messages', { keyPath: 'id' })
           store.createIndex('channelId', 'channel_id')
         }
-        if (!db.objectStoreNames.contains('pastes')) {
-          db.createObjectStore('pastes', { keyPath: 'id' })
-        }
         if (!db.objectStoreNames.contains('notes')) {
           db.createObjectStore('notes', { keyPath: 'id' })
         }
@@ -84,17 +81,6 @@ export const localDb = {
     return db.getAll('messages')
   },
 
-  // Pastes
-  async getPaste(id: string): Promise<any | undefined> {
-    const db = await getDB()
-    return db.get('pastes', id)
-  },
-
-  async savePaste(paste: any): Promise<void> {
-    const db = await getDB()
-    await db.put('pastes', paste)
-  },
-
   // Personal Notes
   async getNotes(): Promise<any[]> {
     const db = await getDB()
@@ -150,7 +136,6 @@ export const localDb = {
     const db = await getDB()
     const posts = await db.getAll('posts')
     const messages = await db.getAll('messages')
-    const pastes = await db.getAll('pastes')
     const notes = await db.getAll('notes')
 
     const payload = {
@@ -159,7 +144,6 @@ export const localDb = {
       data: {
         posts,
         messages,
-        pastes,
         notes
       }
     }
@@ -173,7 +157,7 @@ export const localDb = {
     if (!payload.data) throw new Error('Invalid activities payload')
 
     const db = await getDB()
-    const { posts = [], messages = [], pastes = [], notes = [] } = payload.data
+    const { posts = [], messages = [], notes = [] } = payload.data
 
     const txPosts = db.transaction('posts', 'readwrite')
     for (const post of posts) {
@@ -186,12 +170,6 @@ export const localDb = {
       if (msg && msg.id) await txMessages.store.put(msg)
     }
     await txMessages.done
-
-    const txPastes = db.transaction('pastes', 'readwrite')
-    for (const paste of pastes) {
-      if (paste && paste.id) await txPastes.store.put(paste)
-    }
-    await txPastes.done
 
     const txNotes = db.transaction('notes', 'readwrite')
     for (const note of notes) {

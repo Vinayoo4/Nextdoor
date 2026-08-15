@@ -8,6 +8,15 @@ export function parseBody<T>(req: Request, schema: ZodSchema<T>): T {
     const first = result.error.errors[0]
     throw new ApiError(400, first?.message ?? 'Invalid request body')
   }
+
+  // Enforce strict check to reject unknown fields globally
+  const allowedKeys = Object.keys(result.data as any)
+  const incomingKeys = Object.keys(req.body || {})
+  const extraKeys = incomingKeys.filter((k) => !allowedKeys.includes(k))
+  if (extraKeys.length > 0) {
+    throw new ApiError(400, `Unknown request fields: ${extraKeys.join(', ')}`)
+  }
+
   return result.data
 }
 

@@ -9,6 +9,8 @@ import { Spinner, ErrorBox } from '@/components/UI'
 import { categoryMeta } from '@/utils/categories'
 import { todayHours } from '@/utils/format'
 import { APP_CONFIG } from '@/config'
+import BusinessReviews from '@/components/BusinessReviews'
+import BusinessEditModal from '@/components/BusinessEditModal'
 
 export default function BusinessDetail() {
   const { slug } = useParams<{ slug: string }>()
@@ -403,233 +405,44 @@ export default function BusinessDetail() {
         </div>
       )}
 
-      <section className="mt-6">
-        <h2 className="text-base">Reviews</h2>
-        <form onSubmit={submitReview} className="card mt-3 space-y-3">
-          <div>
-            <p className="mb-1 text-sm font-semibold text-slate-600">Rate this place</p>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setRating(i)}
-                  className={`text-2xl ${i <= rating ? 'text-amber-400' : 'text-slate-300'}`}
-                  aria-label={`${i} star`}
-                >
-                  ★
-                </button>
-              ))}
-            </div>
-          </div>
-          <textarea
-            className="input min-h-20 resize-none"
-            placeholder="Share your experience…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={1000}
-          />
-          {reviewError && <p className="text-sm font-medium text-red-600">{reviewError}</p>}
-          <button type="submit" className="btn-primary w-full">
-            Submit Review
-          </button>
-        </form>
+      <BusinessReviews
+        reviews={reviews}
+        rating={rating}
+        setRating={setRating}
+        text={text}
+        setText={setText}
+        reviewError={reviewError}
+        handleSubmitReview={submitReview}
+      />
 
-        <div className="mt-4 space-y-3">
-          {reviews.map((r) => (
-            <div key={r.id} className="card">
-              <div className="flex items-center justify-between">
-                <RatingStars rating={r.rating} size={14} />
-                <span className="text-xs text-slate-400">neighbor</span>
-              </div>
-              <p className="mt-2 text-sm text-slate-700">{r.text}</p>
-              {r.ownerReply && (
-                <p className="mt-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-                  <strong>Owner reply:</strong> {r.ownerReply}
-                </p>
-              )}
-            </div>
-          ))}
-          {reviews.length === 0 && (
-            <p className="py-6 text-center text-sm text-slate-400">No reviews yet — be the first!</p>
-          )}
-        </div>
-      </section>
-
-      {/* Edit Business Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-slate-150 space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150 text-left">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-800">⚙️ Edit Place details</h3>
-                <p className="text-[10px] text-slate-500">Edit business, location, verified status and listing priority.</p>
-              </div>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
-            </div>
-
-            <form onSubmit={handleEditSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Name</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Category</label>
-                  <select
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
-                    required
-                  >
-                    <option value="Food">Food</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Govt">Govt</option>
-                    <option value="Banking">Banking</option>
-                    <option value="Education">Education</option>
-                    <option value="Worship">Worship</option>
-                    <option value="Transport">Transport</option>
-                    <option value="Shopping">Shopping</option>
-                    <option value="Services">Services</option>
-                    <option value="Emergency">Emergency</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Address</label>
-                <input
-                  type="text"
-                  value={editAddress}
-                  onChange={(e) => setEditAddress(e.target.value)}
-                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800 font-semibold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Description</label>
-                <textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary min-h-14 bg-white text-slate-800"
-                  maxLength={1000}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Phone</label>
-                  <input
-                    type="text"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">WhatsApp</label>
-                  <input
-                    type="text"
-                    value={editWhatsapp}
-                    onChange={(e) => setEditWhatsapp(e.target.value)}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Latitude</label>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    value={editLat}
-                    onChange={(e) => setEditLat(Number(e.target.value))}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Longitude</label>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    value={editLng}
-                    onChange={(e) => setEditLng(Number(e.target.value))}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-800"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Owner User ID</label>
-                  <input
-                    type="text"
-                    value={editOwnerId}
-                    placeholder="Enter owner user_id"
-                    onChange={(e) => setEditOwnerId(e.target.value)}
-                    className="w-full rounded border border-slate-200 p-1.5 text-xs focus:outline-none focus:border-primary bg-white text-slate-850"
-                  />
-                </div>
-                <div className="flex items-center gap-2 pt-4 pl-2">
-                  <input
-                    type="checkbox"
-                    id="editVerified"
-                    checked={editVerified}
-                    onChange={(e) => setEditVerified(e.target.checked)}
-                    className="h-4 w-4 text-primary focus:ring-primary border-slate-200 rounded cursor-pointer"
-                  />
-                  <label htmlFor="editVerified" className="text-xs font-bold text-slate-700 select-none cursor-pointer">✓ Verified Place</label>
-                </div>
-              </div>
-
-              {/* Listing Priority Slider */}
-              <div className="space-y-1.5 pt-2 border-t">
-                <label className="block text-[9px] text-slate-500 font-bold uppercase">Listing Priority Rank ({editPriority})</label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={editPriority}
-                    onChange={(e) => setEditPriority(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                  <span className="text-xs font-bold text-slate-700 w-8 text-right">{editPriority}</span>
-                </div>
-                <p className="text-[9px] text-slate-400">SALTEDHASH and TRI listings are prioritized at 100/90 to always float at the top.</p>
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t">
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="flex-1 btn-primary text-xs py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg"
-                >
-                  {updating ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="btn btn-outline text-xs py-2 px-4 border border-slate-200 hover:bg-slate-50 rounded-lg"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <BusinessEditModal
+        showEditModal={showEditModal}
+        setShowEditModal={setShowEditModal}
+        updating={updating}
+        editName={editName}
+        setEditName={setEditName}
+        editCategory={editCategory}
+        setEditCategory={setEditCategory}
+        editAddress={editAddress}
+        setEditAddress={setEditAddress}
+        editDescription={editDescription}
+        setEditDescription={setEditDescription}
+        editPhone={editPhone}
+        setEditPhone={setEditPhone}
+        editWhatsapp={editWhatsapp}
+        setEditWhatsapp={setEditWhatsapp}
+        editLat={editLat}
+        setEditLng={setEditLng}
+        editLng={editLng}
+        setEditLat={setEditLat}
+        editOwnerId={editOwnerId}
+        setEditOwnerId={setEditOwnerId}
+        editVerified={editVerified}
+        setEditVerified={setEditVerified}
+        editPriority={editPriority}
+        setEditPriority={setEditPriority}
+        handleEditSubmit={handleEditSubmit}
+      />
 
       <p className="mt-6 pb-2 text-center text-xs text-slate-400">Listed on {APP_CONFIG.appName}</p>
     </div>

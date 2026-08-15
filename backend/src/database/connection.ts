@@ -1,73 +1,249 @@
 import Database from 'better-sqlite3'
+import { Worker } from 'node:worker_threads'
 import { mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { env } from '../config/env'
 
-let db: Database.Database | null = null
+export interface StatementAdapter {
+  all(...params: unknown[]): any[]
+  get(...params: unknown[]): any
+  run(...params: unknown[]): { changes: number; lastInsertRowid?: number | string | bigint }
+}
 
-export function getDatabase(): Database.Database {
-  if (db) return db
+export interface DatabaseAdapter {
+  prepare(query: string): StatementAdapter
+  exec(query: string): void
+  transaction<T>(fn: () => T): () => T
+  pragma?(query: string): unknown
+  close?(): void
+}
 
-  const dbPath = resolve(__dirname, '..', '..', '..', env.databasePath || './data/app.db')
-  const dbDir = dirname(dbPath)
+let dbInstance: DatabaseAdapter | null = null
+let pgWorker: Worker | null = null
+const sab = new SharedArrayBuffer(8 * 1024 * 1024) // 8MB communication buffer
+const int32 = new Int32Array(sab)
+const uint8 = new Uint8Array(sab)
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
-  if (!existsSync(dbDir)) {
-    mkdirSync(dbDir, { recursive: true })
+function executePgQuerySync(query: string, params: unknown[] = []): any {
+  if (!pgWorker) {
+    const isProduction = __filename.endsWith('.js') || process.env.NODE_ENV === 'production'
+    const workerPath = isProduction
+      ? resolve(__dirname, 'pgWorker.js')
+      : resolve(__dirname, 'pgWorker.ts')
+
+    pgWorker = new Worker(workerPath, {
+      workerData: { connectionString: process.env.DATABASE_URL, sab },
+    })
+
+    pgWorker.unref()
   }
 
-  db = new Database(dbPath)
+  // Write query data to SharedArrayBuffer
+  const queryBytes = encoder.encode(JSON.stringify({ query, params }))
+  uint8.set(queryBytes, 8)
+  int32[1] = queryBytes.length
 
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.pragma('synchronous = NORMAL')
-  db.pragma('cache_size = -32768')
-  db.pragma('temp_store = MEMORY')
-  db.pragma('mmap_size = 268435456')
-  db.pragma('page_size = 4096')
+  // Set state to 1 (Query requested) and notify worker
+  Atomics.store(int32, 0, 1)
+  Atomics.notify(int32, 0, 1)
 
-  return db
+  // Block synchronously until worker finishes (state changes from 1 to 2 or 3)
+  Atomics.wait(int32, 0, 1)
+
+  const state = Atomics.load(int32, 0)
+  const responseLen = int32[1]
+  const responseBytes = uint8.subarray(8, 8 + responseLen)
+  const responseString = decoder.decode(responseBytes)
+
+  // Set state back to 0 (Idle)
+  Atomics.store(int32, 0, 0)
+
+  const res = JSON.parse(responseString)
+  if (state === 3) {
+    throw new Error(res.error || 'PostgreSQL execution error')
+  }
+
+  return res
+}
+
+export function getDatabase(): DatabaseAdapter {
+  if (dbInstance) return dbInstance
+
+  const pgUrl = process.env.DATABASE_URL
+  if (pgUrl) {
+    console.log('[db] Initializing dynamic PostgreSQL client adapter')
+    dbInstance = {
+      prepare(query: string) {
+        return {
+          all(...params: unknown[]) {
+            const res = executePgQuerySync(query, params)
+            return res.rows
+          },
+          get(...params: unknown[]) {
+            const res = executePgQuerySync(query, params)
+            return res.rows[0] || null
+          },
+          run(...params: unknown[]) {
+            const res = executePgQuerySync(query, params)
+            return { changes: res.changes }
+          },
+        }
+      },
+      exec(query: string) {
+        executePgQuerySync(query, [])
+      },
+      transaction<T>(fn: () => T) {
+        return () => {
+          executePgQuerySync('BEGIN', [])
+          try {
+            const res = fn()
+            executePgQuerySync('COMMIT', [])
+            return res
+          } catch (err) {
+            executePgQuerySync('ROLLBACK', [])
+            throw err
+          }
+        }
+      },
+      pragma(query: string) {
+        if (query.startsWith('table_info(')) {
+          const tableName = query.match(/table_info\((.+)\)/)?.[1]
+          if (tableName) {
+            const sql = `
+              SELECT column_name as name 
+              FROM information_schema.columns 
+              WHERE table_name = $1
+            `
+            const res = executePgQuerySync(sql, [tableName.toLowerCase()])
+            return res.rows
+          }
+        }
+        return []
+      },
+      close() {
+        if (pgWorker) {
+          pgWorker.terminate()
+          pgWorker = null
+        }
+        dbInstance = null
+      },
+    }
+  } else {
+    console.log('[db] Initializing fallback local SQLite engine')
+    const dbPath = resolve(__dirname, '..', '..', '..', env.databasePath || './data/app.db')
+    const dbDir = dirname(dbPath)
+
+    if (!existsSync(dbDir)) {
+      mkdirSync(dbDir, { recursive: true })
+    }
+
+    const sqliteDb = new Database(dbPath)
+    sqliteDb.pragma('journal_mode = WAL')
+    sqliteDb.pragma('foreign_keys = ON')
+
+    dbInstance = {
+      prepare(query: string) {
+        const stmt = sqliteDb.prepare(query)
+        return {
+          all(...params: unknown[]) {
+            return stmt.all(...params)
+          },
+          get(...params: unknown[]) {
+            return stmt.get(...params)
+          },
+          run(...params: unknown[]) {
+            return stmt.run(...params)
+          },
+        }
+      },
+      exec(query: string) {
+        sqliteDb.exec(query)
+      },
+      transaction<T>(fn: () => T) {
+        const trans = sqliteDb.transaction(fn)
+        return () => trans()
+      },
+      pragma(query: string) {
+        return sqliteDb.pragma(query)
+      },
+      close() {
+        sqliteDb.close()
+        dbInstance = null
+      },
+    }
+  }
+
+  return dbInstance!
 }
 
 export function closeDatabase(): void {
-  if (db) {
-    db.close()
-    db = null
+  if (dbInstance && dbInstance.close) {
+    dbInstance.close()
+  }
+  dbInstance = null
+}
+
+function checkTableExists(tableName: string, isPg: boolean, db: DatabaseAdapter): boolean {
+  if (isPg) {
+    const res = db.prepare(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1"
+    ).get(tableName.toLowerCase())
+    return !!res
+  } else {
+    const res = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"
+    ).get(tableName)
+    return !!res
+  }
+}
+
+function checkColumnExists(tableName: string, columnName: string, isPg: boolean, db: DatabaseAdapter): boolean {
+  if (isPg) {
+    const res = db.prepare(
+      "SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = $2"
+    ).get(tableName.toLowerCase(), columnName.toLowerCase())
+    return !!res
+  } else {
+    const cols = db.pragma!(`table_info(${tableName})`) as any[]
+    return cols.some((c) => c.name === columnName)
   }
 }
 
 export function runMigrations(): void {
   const database = getDatabase()
+  const isPg = !!process.env.DATABASE_URL
 
   // 1. Run migrations for ALTERing tables if they exist
   try {
-    const circlesInfo = database.pragma("table_info(circles)") as any[];
-    const circlesHasPin = circlesInfo.some((col: any) => col.name === 'pin');
-    if (!circlesHasPin && circlesInfo.length > 0) {
-      database.exec("ALTER TABLE circles ADD COLUMN pin TEXT;");
-      console.log("[db migration] Added pin column to circles");
+    if (checkTableExists('circles', isPg, database)) {
+      if (!checkColumnExists('circles', 'pin', isPg, database)) {
+        database.exec('ALTER TABLE circles ADD COLUMN pin TEXT;')
+        console.log('[db migration] Added pin column to circles')
+      }
     }
   } catch (e) {
-    console.error("Migration error circles pin:", e);
+    console.error('Migration error circles pin:', e)
   }
 
   try {
-    const channelsInfo = database.pragma("table_info(channels)") as any[];
-    const channelsHasPin = channelsInfo.some((col: any) => col.name === 'pin');
-    if (!channelsHasPin && channelsInfo.length > 0) {
-      database.exec("ALTER TABLE channels ADD COLUMN pin TEXT;");
-      console.log("[db migration] Added pin column to channels");
+    if (checkTableExists('channels', isPg, database)) {
+      if (!checkColumnExists('channels', 'pin', isPg, database)) {
+        database.exec('ALTER TABLE channels ADD COLUMN pin TEXT;')
+        console.log('[db migration] Added pin column to channels')
+      }
     }
   } catch (e) {
-    console.error("Migration error channels pin:", e);
+    console.error('Migration error channels pin:', e)
   }
 
   try {
-    const membersInfo = database.pragma("table_info(circle_members)") as any[];
-    if (membersInfo.length > 0) {
-      const currentOwnerCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'owner'").get() as any;
-      const currentAdminCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'admin'").get() as any;
+    if (!isPg && checkTableExists('circle_members', isPg, database)) {
+      const currentOwnerCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'owner'").get() as any
+      const currentAdminCount = database.prepare("SELECT COUNT(*) as count FROM circle_members WHERE role = 'admin'").get() as any
       if ((currentOwnerCount && currentOwnerCount.count > 0) || (currentAdminCount && currentAdminCount.count > 0)) {
-        console.log("[db migration] Migrating circle_members role schema...");
+        console.log('[db migration] Migrating circle_members role schema...')
         database.transaction(() => {
           database.exec(`
             CREATE TABLE IF NOT EXISTS circle_members_new (
@@ -78,7 +254,7 @@ export function runMigrations(): void {
               joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
               UNIQUE(circle_id, user_id)
             );
-          `);
+          `)
           database.exec(`
             INSERT OR IGNORE INTO circle_members_new (id, circle_id, user_id, role, joined_at)
             SELECT id, circle_id, user_id,
@@ -87,84 +263,103 @@ export function runMigrations(): void {
                         ELSE 'member' END,
                    joined_at
             FROM circle_members;
-          `);
-          database.exec("DROP TABLE circle_members;");
-          database.exec("ALTER TABLE circle_members_new RENAME TO circle_members;");
-        })();
-        console.log("[db migration] Recreated circle_members with new roles check constraint");
+          `)
+          database.exec('DROP TABLE circle_members;')
+          database.exec('ALTER TABLE circle_members_new RENAME TO circle_members;')
+        })()
+        console.log('[db migration] Recreated circle_members with new roles check constraint')
       }
     }
   } catch (e) {
-    console.error("Migration error circle_members roles:", e);
+    console.error('Migration error circle_members roles:', e)
   }
 
   try {
-    const businessesInfo = database.pragma("table_info(businesses)") as any[];
-    const hasPriority = businessesInfo.some((col: any) => col.name === 'priority');
-    if (!hasPriority && businessesInfo.length > 0) {
-      database.exec("ALTER TABLE businesses ADD COLUMN priority INTEGER DEFAULT 0;");
-      console.log("[db migration] Added priority column to businesses");
+    if (checkTableExists('businesses', isPg, database)) {
+      if (!checkColumnExists('businesses', 'priority', isPg, database)) {
+        database.exec('ALTER TABLE businesses ADD COLUMN priority INTEGER DEFAULT 0;')
+        console.log('[db migration] Added priority column to businesses')
+      }
     }
   } catch (e) {
-    console.error("Migration error businesses priority:", e);
+    console.error('Migration error businesses priority:', e)
   }
 
   try {
-    const messagesInfo = database.pragma("table_info(messages)") as any[];
-    const hasExpiresAt = messagesInfo.some((col: any) => col.name === 'expires_at');
-    if (!hasExpiresAt && messagesInfo.length > 0) {
-      database.exec("ALTER TABLE messages ADD COLUMN expires_at DATETIME;");
-      console.log("[db migration] Added expires_at column to messages");
+    if (checkTableExists('messages', isPg, database)) {
+      if (!checkColumnExists('messages', 'expires_at', isPg, database)) {
+        const dType = isPg ? 'TIMESTAMP' : 'DATETIME'
+        database.exec(`ALTER TABLE messages ADD COLUMN expires_at ${dType};`)
+        console.log('[db migration] Added expires_at column to messages')
+      }
     }
   } catch (e) {
-    console.error("Migration error messages expires_at:", e);
+    console.error('Migration error messages expires_at:', e)
   }
 
-  const schema = getSchema()
-  
+  const schema = getSchema(isPg)
   for (const statement of schema) {
     database.exec(statement)
   }
 
   // Ensure Guest User exists to satisfy foreign key constraints for unauthenticated clients
-  database.prepare(`
-    INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
-    VALUES ('000000000000000000000000', 'guest@nextdoor.local', 'Guest User', 'guest_placeholder', 'user', 0, datetime('now'), datetime('now'))
-  `).run()
+  const insertGuestSql = isPg
+    ? `INSERT INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+       VALUES ('000000000000000000000000', 'guest@nextdoor.local', 'Guest User', 'guest_placeholder', 'user', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT (email) DO NOTHING`
+    : `INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+       VALUES ('000000000000000000000000', 'guest@nextdoor.local', 'Guest User', 'guest_placeholder', 'user', 0, datetime('now'), datetime('now'))`
+  database.exec(insertGuestSql)
 
   // Ensure Super Admin exists if configured in env
   if (env.superAdminEmail) {
     const emailNorm = env.superAdminEmail.toLowerCase().trim()
-    database.prepare(`
-      INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
-      VALUES ('super_admin_id', ?, 'Super Admin', '', 'admin', 0, datetime('now'), datetime('now'))
-    `).run(emailNorm)
+    const insertAdminSql = isPg
+      ? `INSERT INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+         VALUES ('super_admin_id', $1, 'Super Admin', '', 'admin', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (email) DO NOTHING`
+      : `INSERT OR IGNORE INTO users (id, email, name, password_hash, role, points, created_at, updated_at)
+         VALUES ('super_admin_id', ?, 'Super Admin', '', 'admin', 0, datetime('now'), datetime('now'))`
+
+    if (isPg) {
+      database.prepare(insertAdminSql).run(emailNorm)
+    } else {
+      database.prepare(insertAdminSql).run(emailNorm)
+    }
     console.log(`[db init] Verified/created Super Admin user with email: ${emailNorm}`)
   }
 
   // Ensure default emergency contacts exist
-  const emergencyCount = database.prepare("SELECT COUNT(*) as count FROM emergencies").get() as any
-  if (emergencyCount && emergencyCount.count === 0) {
+  const countEmergenciesSql = 'SELECT COUNT(*) as count FROM emergencies'
+  const emergencyCount = database.prepare(countEmergenciesSql).get() as any
+  const countVal = emergencyCount?.count ?? emergencyCount?.countVal ?? 0
+
+  if (Number(countVal) === 0) {
     const emergenciesList = [
       { name: 'Police Helpline', type: 'Police', phone: '112', address: 'Central Police Station, Railway Chowk, Rewari', lat: 28.1975, lng: 76.6210 },
       { name: 'Fire Station Rewari', type: 'Fire', phone: '101', address: 'Fire Station, Jhajjar Road, Rewari', lat: 28.1990, lng: 76.6275 },
       { name: 'Ambulance & Trauma Center', type: 'Ambulance', phone: '102', address: 'Civil Hospital Trauma Center, Rewari', lat: 28.1889, lng: 76.6340 },
       { name: 'Women Helpline', type: 'Women Help', phone: '1091', address: 'Women Police Station, Rewari', lat: 28.1960, lng: 76.6180 },
-      { name: 'NHAI Expressway Helpline', type: 'Highway Help', phone: '1033', address: 'NH-48 Corridor, Rewari Segment', lat: 28.2185, lng: 76.7780 }
+      { name: 'NHAI Expressway Helpline', type: 'Highway Help', phone: '1033', address: 'NH-48 Corridor, Rewari Segment', lat: 28.2185, lng: 76.7780 },
     ]
     for (const e of emergenciesList) {
       const id = Math.random().toString(36).substring(2, 15)
-      database.prepare(`
-        INSERT INTO emergencies (id, name, type, phone, address, location_lat, location_lng, city)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'Rewari')
-      `).run(id, e.name, e.type, e.phone, e.address, e.lat, e.lng)
+      const insertEmergencySql = isPg
+        ? `INSERT INTO emergencies (id, name, type, phone, address, location_lat, location_lng, city)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'Rewari')`
+        : `INSERT INTO emergencies (id, name, type, phone, address, location_lat, location_lng, city)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'Rewari')`
+      database.prepare(insertEmergencySql).run(id, e.name, e.type, e.phone, e.address, e.lat, e.lng)
     }
     console.log('[db init] Bootstrapped production emergency contacts')
   }
 
   // Ensure default landmarks, temples, and transit stands exist in buildings
-  const buildingsCount = database.prepare("SELECT COUNT(*) as count FROM buildings").get() as any
-  if (buildingsCount && buildingsCount.count === 0) {
+  const countBuildingsSql = 'SELECT COUNT(*) as count FROM buildings'
+  const buildingsCount = database.prepare(countBuildingsSql).get() as any
+  const bCountVal = buildingsCount?.count ?? buildingsCount?.countVal ?? 0
+
+  if (Number(bCountVal) === 0) {
     const buildingsList = [
       // Heritage
       { name: 'Rewari Steam Locomotive Shed', type: 'heritage', address: 'Railway Colony, Rewari', timings: '9:00 AM - 5:00 PM', contact: '01274-256613', services: ['Museum', 'Guided Tours', 'Souvenirs'], description: 'Established in 1893, it is the only surviving steam locomotive shed in India. It houses some of India\'s oldest steam engines, including the legendary Fairy Queen.', lat: 28.1882, lng: 76.6231 },
@@ -181,14 +376,16 @@ export function runMigrations(): void {
       { name: 'Dharuhera Chauk Bypass Auto Stand', type: 'transport', address: 'Dharuhera Chauk Bypass, Rewari', timings: '6:00 AM - 9:00 PM', contact: '', services: ['Sharing Autos', 'Inter-city travel boarding'], description: 'Major intersection boarding point for local sharing autos towards Dharuhera industrial town, Bawal, and NH-48 bypass.', lat: 28.2048, lng: 76.6375 },
       // Govt
       { name: 'District & Sessions Court Rewari', type: 'govt', address: 'District Secretariat, Sector 1, Rewari', timings: '10:00 AM - 5:00 PM', contact: '01274-250001', services: ['Judicial services', 'Notary public', 'Advocate chambers'], description: 'Primary judicial court complex for Rewari district legal matters.', lat: 28.1920, lng: 76.6205 },
-      { name: 'Tehsil Office Rewari', type: 'govt', address: 'Old Court Road, Rewari', timings: '9:00 AM - 5:00 PM', contact: '01274-256617', services: ['Land Registration', 'Certificates', 'Citizen Helpdesk'], description: 'Government administrative department responsible for local land records and municipal documentation.', lat: 28.1955, lng: 76.6150 }
+      { name: 'Tehsil Office Rewari', type: 'govt', address: 'Old Court Road, Rewari', timings: '9:00 AM - 5:00 PM', contact: '01274-256617', services: ['Land Registration', 'Certificates', 'Citizen Helpdesk'], description: 'Government administrative department responsible for local land records and municipal documentation.', lat: 28.1955, lng: 76.6150 },
     ]
     for (const b of buildingsList) {
       const id = Math.random().toString(36).substring(2, 15)
-      database.prepare(`
-        INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)
-      `).run(
+      const insertBuildingSql = isPg
+        ? `INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rewari', $10, $11)`
+        : `INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)`
+      database.prepare(insertBuildingSql).run(
         id, b.name, b.type, b.address, b.timings, b.contact,
         JSON.stringify(b.services), b.description, JSON.stringify([]),
         b.lat, b.lng
@@ -198,18 +395,25 @@ export function runMigrations(): void {
   }
 
   // Ensure Surrounding Forest and Wildlife Areas exist
-  const jhabuaExists = database.prepare("SELECT COUNT(*) as count FROM buildings WHERE name = 'Jhabua Reserve Forest & Wildlife Area'").get() as any
-  if (jhabuaExists && jhabuaExists.count === 0) {
+  const countJhabuaSql = isPg
+    ? "SELECT COUNT(*) as count FROM buildings WHERE name = 'Jhabua Reserve Forest & Wildlife Area'"
+    : "SELECT COUNT(*) as count FROM buildings WHERE name = 'Jhabua Reserve Forest & Wildlife Area'"
+  const jhabuaExists = database.prepare(countJhabuaSql).get() as any
+  const jCountVal = jhabuaExists?.count ?? jhabuaExists?.countVal ?? 0
+
+  if (Number(jCountVal) === 0) {
     const forests = [
       { name: 'Jhabua Reserve Forest & Wildlife Area', type: 'heritage', address: 'Jhabua, Rewari Haryana', timings: 'Sunrise - Sunset', contact: '', services: ['Wildlife Spotting', 'Eco Trails', 'Nature Photography'], description: 'A protected forest reserve spanning several acres, housing regional wildlife (deer, peacocks, nilgai) and native arid vegetation of the Aravalli foothills.', lat: 28.0845, lng: 76.5820 },
-      { name: 'Masani Barrage Wetland & Forest Reserve', type: 'heritage', address: 'Masani Village, NH-48 Bypass, Rewari', timings: 'Open 24 hours', contact: '', services: ['Birdwatching', 'Wetland Conservations', 'Photography'], description: 'Located on the Sahibi River, this reserve forest and wetland area serves as a major ecological site for migratory birds and natural groundwater recharging.', lat: 28.2215, lng: 76.7125 }
+      { name: 'Masani Barrage Wetland & Forest Reserve', type: 'heritage', address: 'Masani Village, NH-48 Bypass, Rewari', timings: 'Open 24 hours', contact: '', services: ['Birdwatching', 'Wetland Conservations', 'Photography'], description: 'Located on the Sahibi River, this reserve forest and wetland area serves as a major ecological site for migratory birds and natural groundwater recharging.', lat: 28.2215, lng: 76.7125 },
     ]
     for (const f of forests) {
       const id = Math.random().toString(36).substring(2, 15)
-      database.prepare(`
-        INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)
-      `).run(
+      const insertForestSql = isPg
+        ? `INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rewari', $10, $11)`
+        : `INSERT INTO buildings (id, name, type, address, timings, contact, services, description, photos, city_id, location_lat, location_lng)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'rewari', ?, ?)`
+      database.prepare(insertForestSql).run(
         id, f.name, f.type, f.address, f.timings, f.contact,
         JSON.stringify(f.services), f.description, JSON.stringify([]),
         f.lat, f.lng
@@ -218,24 +422,31 @@ export function runMigrations(): void {
     console.log('[db init] Bootstrapped surrounding reserve forests and wildlife areas')
   }
 
-  // Ensure SALTEDHASH and TRI businesses exist
-  const businessCount = database.prepare("SELECT COUNT(*) as count FROM businesses").get() as any
-  if (businessCount && businessCount.count === 0) {
+  // Ensure SALTEDHASH and TRIU businesses exist
+  const countBizSql = 'SELECT COUNT(*) as count FROM businesses'
+  const businessCount = database.prepare(countBizSql).get() as any
+  const bizCountVal = businessCount?.count ?? businessCount?.countVal ?? 0
+
+  if (Number(bizCountVal) === 0) {
     const defaultBiz = [
       { id: 'biz_saltedhash', name: 'SALTEDHASH', slug: 'saltedhash-site', category: 'Services', subcategory: 'Software Development', address: 'Model Town, Rewari', phone: '01274-999888', lat: 28.1915, lng: 76.6240, priority: 100, verified: 1 },
-      { id: 'biz_tri', name: 'TRIU', slug: 'triu-site', category: 'Services', subcategory: 'Business Consulting', address: 'Sector 3, Rewari', phone: '01274-888777', lat: 28.1960, lng: 76.6290, priority: 90, verified: 1 }
+      { id: 'biz_tri', name: 'TRIU', slug: 'triu-site', category: 'Services', subcategory: 'Business Consulting', address: 'Sector 3, Rewari', phone: '01274-888777', lat: 28.1960, lng: 76.6290, priority: 90, verified: 1 },
     ]
     for (const b of defaultBiz) {
-      database.prepare(`
-        INSERT INTO businesses (id, name, slug, category, subcategory, address, phone, verified, rating_avg, rating_count, status, location_lat, location_lng, priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?, ?)
-      `).run(b.id, b.name, b.slug, b.category, b.subcategory, b.address, b.phone, b.verified, b.lat, b.lng, b.priority)
+      const insertBizSql = isPg
+        ? `INSERT INTO businesses (id, name, slug, category, subcategory, address, phone, verified, rating_avg, rating_count, status, location_lat, location_lng, priority)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 0, 'active', $9, $10, $11)`
+        : `INSERT INTO businesses (id, name, slug, category, subcategory, address, phone, verified, rating_avg, rating_count, status, location_lat, location_lng, priority)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?, ?)`
+      database.prepare(insertBizSql).run(b.id, b.name, b.slug, b.category, b.subcategory, b.address, b.phone, b.verified, b.lat, b.lng, b.priority)
     }
-    console.log('[db init] Bootstrapped priority businesses: SALTEDHASH and TRI')
+    console.log('[db init] Bootstrapped priority businesses: SALTEDHASH and TRIU')
   }
 }
 
-function getSchema(): string[] {
+function getSchema(isPg: boolean): string[] {
+  const dType = isPg ? 'TIMESTAMP' : 'DATETIME'
+  const realType = isPg ? 'DOUBLE PRECISION' : 'REAL'
   return [
     `CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -245,9 +456,9 @@ function getSchema(): string[] {
       role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','owner','admin')),
       locality_id TEXT,
       points INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS localities (
@@ -255,10 +466,10 @@ function getSchema(): string[] {
       name TEXT NOT NULL,
       city TEXT NOT NULL,
       state TEXT,
-      center_lat REAL,
-      center_lng REAL,
-      radius_km REAL DEFAULT 5,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      center_lat ${realType},
+      center_lng ${realType},
+      radius_km ${realType} DEFAULT 5,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS posts (
@@ -267,12 +478,12 @@ function getSchema(): string[] {
       author_name TEXT NOT NULL,
       content TEXT NOT NULL,
       image_url TEXT,
-      location_lat REAL,
-      location_lng REAL,
+      location_lat ${realType},
+      location_lng ${realType},
       locality_id TEXT REFERENCES localities(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS comments (
@@ -281,16 +492,16 @@ function getSchema(): string[] {
       user_id TEXT NOT NULL REFERENCES users(id),
       author_name TEXT NOT NULL,
       content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS post_upvotes (
       id TEXT PRIMARY KEY,
       post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(post_id, user_id)
     )`,
 
@@ -310,17 +521,18 @@ function getSchema(): string[] {
       attributes TEXT DEFAULT '{"parking":false,"cards":false,"homeDelivery":false}',
       owner_id TEXT REFERENCES users(id),
       verified INTEGER DEFAULT 0,
-      verified_at DATETIME,
+      verified_at ${dType},
       plan TEXT DEFAULT 'free' CHECK (plan IN ('free','promoted')),
-      rating_avg REAL DEFAULT 0,
+      rating_avg ${realType} DEFAULT 0,
       rating_count INTEGER DEFAULT 0,
       status TEXT DEFAULT 'active' CHECK (status IN ('active','pending','suspended')),
-      location_lat REAL NOT NULL,
-      location_lng REAL NOT NULL,
+      location_lat ${realType} NOT NULL,
+      location_lng ${realType} NOT NULL,
       locality_id TEXT REFERENCES localities(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      priority INTEGER DEFAULT 0,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS circles (
@@ -329,9 +541,9 @@ function getSchema(): string[] {
       description TEXT DEFAULT '',
       creator_id TEXT NOT NULL REFERENCES users(id),
       pin TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS circle_members (
@@ -339,7 +551,7 @@ function getSchema(): string[] {
       circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id),
       role TEXT DEFAULT 'member' CHECK (role IN ('member','elder','co_admin','admin')),
-      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      joined_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(circle_id, user_id)
     )`,
 
@@ -348,8 +560,8 @@ function getSchema(): string[] {
       circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id),
       status TEXT DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(circle_id, user_id)
     )`,
 
@@ -358,9 +570,9 @@ function getSchema(): string[] {
       name TEXT NOT NULL,
       circle_id TEXT NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
       pin TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS messages (
@@ -369,12 +581,10 @@ function getSchema(): string[] {
       user_id TEXT NOT NULL REFERENCES users(id),
       author_name TEXT NOT NULL,
       content TEXT NOT NULL,
-      type TEXT DEFAULT 'text' CHECK (type IN ('text','paste')),
-      paste_id TEXT REFERENCES pastes(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME,
-      expires_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType},
+      expires_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS buildings (
@@ -388,10 +598,10 @@ function getSchema(): string[] {
       description TEXT,
       photos TEXT DEFAULT '[]',
       city_id TEXT,
-      location_lat REAL,
-      location_lng REAL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      location_lat ${realType},
+      location_lng ${realType},
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS emergencies (
@@ -400,10 +610,10 @@ function getSchema(): string[] {
       type TEXT NOT NULL,
       phone TEXT NOT NULL,
       address TEXT,
-      location_lat REAL,
-      location_lng REAL,
+      location_lat ${realType},
+      location_lng ${realType},
       city TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS reviews (
@@ -413,9 +623,9 @@ function getSchema(): string[] {
       rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
       text TEXT,
       owner_reply TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      deleted_at ${dType}
     )`,
 
     `CREATE TABLE IF NOT EXISTS offers (
@@ -424,11 +634,11 @@ function getSchema(): string[] {
       title TEXT NOT NULL,
       discount TEXT NOT NULL,
       code TEXT,
-      valid_from DATETIME NOT NULL,
-      valid_to DATETIME NOT NULL,
+      valid_from ${dType} NOT NULL,
+      valid_to ${dType} NOT NULL,
       status TEXT DEFAULT 'active' CHECK (status IN ('active','expired','disabled')),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS analytics_events (
@@ -437,77 +647,7 @@ function getSchema(): string[] {
       listing_id TEXT,
       user_id TEXT REFERENCES users(id),
       meta TEXT DEFAULT '{}',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS waitlist (
-      id TEXT PRIMARY KEY,
-      email TEXT,
-      phone TEXT,
-      city TEXT,
-      position INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS otps (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      code_hash TEXT NOT NULL,
-      expires_at DATETIME NOT NULL,
-      attempts INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS pastes (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL REFERENCES users(id),
-      channel_id TEXT REFERENCES channels(id),
-      society_id TEXT REFERENCES circles(id),
-      title TEXT,
-      content TEXT NOT NULL,
-      language TEXT,
-      filename TEXT,
-      visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('public','unlisted','private','channel')),
-      expires_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME,
-      content_size INTEGER,
-      line_count INTEGER,
-      view_count INTEGER DEFAULT 0,
-      copy_count INTEGER DEFAULT 0,
-      download_count INTEGER DEFAULT 0
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS paste_views (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      paste_id TEXT NOT NULL REFERENCES pastes(id) ON DELETE CASCADE,
-      viewer_id TEXT REFERENCES users(id),
-      ip_hash TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS paste_comments (
-      id TEXT PRIMARY KEY,
-      paste_id TEXT NOT NULL REFERENCES pastes(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS paste_reports (
-      id TEXT PRIMARY KEY,
-      paste_id TEXT NOT NULL REFERENCES pastes(id) ON DELETE CASCADE,
-      reporter_id TEXT REFERENCES users(id),
-      anonymous_token TEXT,
-      reason TEXT NOT NULL CHECK (reason IN ('spam','harassment','personal_info','malicious','illegal','copyright','other')),
-      description TEXT,
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending','reviewed','dismissed','action_taken')),
-      reviewed_by TEXT REFERENCES users(id),
-      reviewed_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS business_claim_requests (
@@ -521,9 +661,9 @@ function getSchema(): string[] {
       evidence_reference TEXT,
       status TEXT DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
       reviewed_by TEXT REFERENCES users(id),
-      reviewed_at DATETIME,
+      reviewed_at ${dType},
       admin_note TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS business_verification_events (
@@ -532,14 +672,14 @@ function getSchema(): string[] {
       admin_id TEXT NOT NULL REFERENCES users(id),
       action TEXT NOT NULL,
       note TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS user_saved_places (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       business_id TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(user_id, business_id)
     )`,
 
@@ -555,10 +695,10 @@ function getSchema(): string[] {
       author_id TEXT NOT NULL REFERENCES users(id),
       reviewer_id TEXT REFERENCES users(id),
       source_reference TEXT,
-      last_verified_at DATETIME,
-      published_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      last_verified_at ${dType},
+      published_at ${dType},
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
+      updated_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS article_revisions (
@@ -567,7 +707,7 @@ function getSchema(): string[] {
       content_markdown TEXT NOT NULL,
       editor_id TEXT NOT NULL REFERENCES users(id),
       change_summary TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
@@ -589,22 +729,9 @@ function getSchema(): string[] {
     `CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id)`,
     `CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_messages_paste ON messages(paste_id)`,
     `CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id)`,
     `CREATE INDEX IF NOT EXISTS idx_offers_business ON offers(business_id)`,
     `CREATE INDEX IF NOT EXISTS idx_offers_valid ON offers(valid_from, valid_to)`,
-    `CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email)`,
-    `CREATE INDEX IF NOT EXISTS idx_otps_expires ON otps(expires_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_visibility ON pastes(visibility)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_owner ON pastes(owner_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_channel ON pastes(channel_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_society ON pastes(society_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_language ON pastes(language)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_created ON pastes(created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_pastes_expires ON pastes(expires_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_paste_views_paste ON paste_views(paste_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_paste_comments_paste ON paste_comments(paste_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_paste_reports_paste ON paste_reports(paste_id)`,
     `CREATE INDEX IF NOT EXISTS idx_business_claims_business ON business_claim_requests(business_id)`,
     `CREATE INDEX IF NOT EXISTS idx_business_claims_requester ON business_claim_requests(requester_id)`,
     `CREATE INDEX IF NOT EXISTS idx_business_claims_status ON business_claim_requests(status)`,
@@ -614,6 +741,6 @@ function getSchema(): string[] {
     `CREATE INDEX IF NOT EXISTS idx_rewari_articles_author ON rewari_articles(author_id)`,
     `CREATE INDEX IF NOT EXISTS idx_article_revisions_article ON article_revisions(article_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_saved_places_user ON user_saved_places(user_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_user_saved_places_business ON user_saved_places(business_id)`
+    `CREATE INDEX IF NOT EXISTS idx_user_saved_places_business ON user_saved_places(business_id)`,
   ]
 }

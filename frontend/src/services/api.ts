@@ -206,51 +206,6 @@ export const nearbyApi = {
     api.post<{ posts: any[]; ok: boolean }>('/api/nearby/sync', { lat, lng, localPosts, localMessages }),
 }
 
-export const pastesApi = {
-  list: (params: Record<string, string> = {}) => {
-    const qs = new URLSearchParams(params).toString()
-    return api.get<{ pastes: import('@/types').Paste[]; page: number; pages: number; total: number }>(
-      `/api/pastes${qs ? `?${qs}` : ''}`
-    )
-  },
-  myPastes: (params: Record<string, string> = {}) => {
-    const qs = new URLSearchParams(params).toString()
-    return api.get<{ pastes: import('@/types').Paste[]; page: number; pages: number; total: number }>(
-      `/api/pastes/mine${qs ? `?${qs}` : ''}`
-    )
-  },
-  userPastes: (username: string, params: Record<string, string> = {}) => {
-    const qs = new URLSearchParams(params).toString()
-    return api.get<{ pastes: import('@/types').Paste[]; page: number; pages: number; total: number }>(
-      `/api/pastes/user/${username}${qs ? `?${qs}` : ''}`
-    )
-  },
-  get: (id: string) => api.get<{ paste: import('@/types').Paste }>(`/api/pastes/${id}`),
-  create: (data: {
-    title?: string
-    content: string
-    language?: string
-    filename?: string
-    visibility?: 'public' | 'unlisted' | 'private' | 'channel'
-    expiresIn?: 'none' | '10m' | '1h' | '1d' | '1w'
-    channelId?: string
-    societyId?: string
-  }) => api.post<{ paste: import('@/types').Paste; message?: import('@/types').Message }>('/api/pastes', data),
-  update: (id: string, data: Partial<{
-    title: string
-    content: string
-    language: string
-    filename: string
-    visibility: 'public' | 'unlisted' | 'private' | 'channel'
-    expiresIn: 'none' | '10m' | '1h' | '1d' | '1w'
-  }>) => api.patch<{ paste: import('@/types').Paste }>(`/api/pastes/${id}`, data),
-  delete: (id: string) => api.del<{ ok: boolean }>(`/api/pastes/${id}`),
-  report: (id: string, reason: string, description?: string) =>
-    api.post<{ ok: boolean }>(`/api/pastes/${id}/report`, { reason, description }),
-  comments: (id: string) => api.get<{ comments: import('@/types').PasteComment[] }>(`/api/pastes/${id}/comments`),
-  addComment: (id: string, content: string) =>
-    api.post<{ comment: import('@/types').PasteComment }>(`/api/pastes/${id}/comments`, { content }),
-}
 
 export const adminApi = {
   listClaims: (status?: string) =>

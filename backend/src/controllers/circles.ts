@@ -28,8 +28,15 @@ const createMessageSchema = z.object({
   expiresIn: z.enum(['none', '10m', '1h', '1d', '1w']).default('none'),
 })
 
+const listCirclesSchema = z.object({
+  page: z.coerce.number().min(1).optional(),
+  limit: z.coerce.number().min(1).max(100).optional(),
+})
+
 export const listCircles = asyncHandler(async (req: Request, res: Response) => {
-  const result = circleRepository.findAll()
+  const { page = 1, limit = 20 } = listCirclesSchema.parse(req.query)
+  const offset = (page - 1) * limit
+  const result = circleRepository.findAll({ limit, offset })
   const userId = req.user?.id
 
   const circles = result.items.map((c) => {
@@ -48,7 +55,12 @@ export const listCircles = asyncHandler(async (req: Request, res: Response) => {
     }
   })
 
-  res.json({ circles })
+  res.json({
+    circles,
+    total: result.total,
+    page,
+    pages: Math.ceil(result.total / limit)
+  })
 })
 
 export const createCircle = asyncHandler(async (req: Request, res: Response) => {
