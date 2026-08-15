@@ -108,6 +108,9 @@ export default function Login() {
               </p>
             )}
 
+            {/* Clerk bot-protection CAPTCHA widget (must exist before signIn.create()) */}
+            <div id="clerk-captcha" />
+
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? 'Sending OTP…' : 'Continue with Email'}
             </button>
