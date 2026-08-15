@@ -10,20 +10,26 @@ user.** Logins are passwordless via email OTP (free tier options below). Busines
 listings/ratings are readable by anyone; posting, reviewing, joining circles, messaging,
 and nearby sync all require login.
 
+**Profile privacy:** every user gets a public profile at `/users/:id`. Regular users see
+other users' profiles **masked** — email is partially hidden and post/chat content shows
+as `xxxx`. Only the account owner and the super admin (`role: admin`) can view the full
+timeline and complete chat history.
+
 ## Architecture
 
 ```
 frontend/  React 19 + Vite 8 + PWA (offline-first via IndexedDB)
   └── calls  /api/*  ->  proxy to backend in dev, VITE_API_URL in prod
 backend/   Express + better-sqlite3 (single SQLite file in data/app.db)
-  └── JWT auth (bearer token), email OTP (Resend | SMTP | console)
+  └── Clerk email OTP -> app JWT (bearer token), verified via @clerk/backend
   └── static-serves frontend/dist in production
 ```
 
 Local-first data (posts you create, circle messages, saved pins) is stored in the
-browser's IndexedDB and synced to the API when online. Messages are ephemeral
-(in-memory on the server); the SQLite DB holds users, posts, comments, businesses,
-reviews, circles, channels, buildings, and emergency contacts.
+browser's IndexedDB and synced to the API when online. Posts and circle messages are
+also persisted to SQLite (with `expires_at` for expiring messages) so chat history and
+timelines survive server restarts. The SQLite DB holds users, posts, messages, comments,
+businesses, reviews, circles, channels, buildings, and emergency contacts.
 
 ## 1. Local development
 
@@ -96,6 +102,7 @@ OTPs print to the backend terminal. Never use this in production.
 | `JWT_SECRET` | Long random string — change it! | `openssl rand -hex 32` |
 | `JWT_EXPIRES_IN` | Token lifetime | `7d` |
 | `CORS_ORIGIN` | Comma-separated allowed origins | `http://localhost:5173,https://your-frontend.vercel.app` |
+| `CLERK_SECRET_KEY` | Clerk **secret** key (backend JWT verification). Login returns 500 if missing | `sk_test_...` |
 | `OSRM_BASE_URL` | OSRM routing server | `https://router.project-osrm.org` |
 | `SEED_ADMIN_EMAIL` | Email promoted to `admin` on seed (see §4) | `admin@rewari.local` |
 | `EMAIL_PROVIDER` | `console` \| `resend` \| `smtp` | `resend` |
@@ -109,6 +116,7 @@ OTPs print to the backend terminal. Never use this in production.
 | Variable | Description |
 |----------|-------------|
 | `VITE_API_URL` | Your deployed API origin, e.g. `https://your-backend.onrender.com`. Leave empty in dev (the Vite proxy handles `/api`). |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (frontend `<ClerkProvider>`), e.g. `pk_test_...` |
 
 ## 4. Seeding Rewari data + admin bootstrap
 
@@ -123,6 +131,27 @@ OTPs print to the backend terminal. Never use this in production.
 
 There are **no demo credentials** — login is always email OTP. `SEED_ADMIN_EMAIL` is only
 bumped to admin when the seed runs and that email is missing.
+
+## 4b. Clerk (email-OTP sign-in) setup
+
+The frontend uses Clerk for passwordless email OTP sign-in; the backend verifies the
+Clerk session JWT with `@clerk/backend` and mints the app JWT from the verified user.
+
+1. Create a Clerk application at https://dashboard.clerk.com → **Users** → turn on
+   **Email** as a strategy, then enable **Email verification code** (email OTP).
+2. Copy the two keys:
+   - `frontend/.env`: `VITE_CLERK_PUBLISHABLE_KEY=pk_test_...`
+   - `backend/.env`: `CLERK_SECRET_KEY=sk_test_...`
+3. Restart both. On sign-in the app calls `POST /api/auth/clerk-sync` with the Clerk
+   session token; the backend verifies it (401 on invalid/expired), resolves the user
+   from Clerk, upserts them, and returns the app JWT.
+
+> In Clerk's free development instance, emails show the OTP on the dev console screen
+> (no real email is sent). In production you must add your domain and enable production
+> sending, otherwise users only see the dev OTP UI. If the frontend is cached by a
+> service worker, a hard refresh / `Unregister service worker` is needed to pick up new
+> builds — a stale PWA showing the old login flow is a common cause of "still seeing dev
+> OTP".
 
 ## 5. Production deployment
 
@@ -163,12 +192,19 @@ cd frontend && npm run build                 # zero TS errors + dist output
 - [ ] `/api/route` returns a route (uses `OSRM_BASE_URL` over HTTPS)
 - [ ] All map data stays within Rewari bounds (28.0–28.3 lat, 76.4–76.8 lng)
 - [ ] Offline: app loads cached feed/businesses; messages queue in IndexedDB
+- [ ] Clerk OTP sign-in returns a valid app JWT (profile loads, no 401s)
+- [ ] `GET /api/users/:id` as a regular user shows masked content (`xxxx`) for other users
+- [ ] `GET /api/admin/users` works only for `role: admin` (403/401 otherwise)
+- [ ] Posts and messages survive a backend restart (persisted in SQLite)
 
 ## 7. Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
 | OTP never arrives | Check provider config; in `console` mode read the backend terminal |
+| Login shows only the Clerk "dev OTP" screen | Stale PWA/service worker — hard refresh / unregister SW; Clerk dev instance doesn't send real email |
+| `clerk-sync` returns 500 | `CLERK_SECRET_KEY` missing in `backend/.env` |
+| `clerk-sync` returns 401 | Clerk session token expired — sign out and in again |
 | 401 on everything | JWT_SECRET changed (old tokens invalid) — log in again |
 | Circles/channels created without PIN | You're on an old build — deploy the current one |
 | DB resets on Render | Add a persistent disk and point `DATABASE_PATH` at it |

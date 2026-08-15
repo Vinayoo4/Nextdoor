@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import { postsApi, adminApi } from '@/services/api'
-import { Navigate } from 'react-router-dom'
-import type { BusinessClaimRequest } from '@/types'
+import { Link, Navigate } from 'react-router-dom'
+import type { BusinessClaimRequest, AdminUserEntry } from '@/types'
 
 export default function AuthorityPortal() {
   const user = useAuthStore((s) => s.user)
 
-  const [activeTab, setActiveTab] = useState<'broadcast' | 'claims' | 'logs'>('broadcast')
+  const [activeTab, setActiveTab] = useState<'broadcast' | 'claims' | 'logs' | 'users'>('broadcast')
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -19,12 +19,18 @@ export default function AuthorityPortal() {
   const [selectedClaim, setSelectedClaim] = useState<BusinessClaimRequest | null>(null)
   const [processingClaim, setProcessingClaim] = useState(false)
 
+  // Users directory states
+  const [users, setUsers] = useState<AdminUserEntry[]>([])
+  const [userFilter, setUserFilter] = useState('')
+
   useEffect(() => {
     if (user?.role === 'admin') {
       if (activeTab === 'claims') {
         loadClaims()
       } else if (activeTab === 'logs') {
         loadLogs()
+      } else if (activeTab === 'users') {
+        loadUsers()
       }
     }
   }, [activeTab])
@@ -54,6 +60,19 @@ export default function AuthorityPortal() {
       setLogs(res.logs)
     } catch (err: any) {
       setError(err.message || 'Failed to load logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadUsers() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await adminApi.listUsers()
+      setUsers(res.users)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load users')
     } finally {
       setLoading(false)
     }
@@ -122,6 +141,14 @@ export default function AuthorityPortal() {
           }`}
         >
           📋 Audit Trail
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`flex-1 pb-2 text-center text-xs font-semibold border-b-2 ${
+            activeTab === 'users' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
+          }`}
+        >
+          👥 Users
         </button>
       </div>
 
@@ -305,6 +332,63 @@ export default function AuthorityPortal() {
                   {log.note && <p className="text-slate-500 italic mt-0.5">Note: {log.note}</p>}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Users Directory */}
+      {activeTab === 'users' && (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h2 className="text-sm font-extrabold text-slate-800">Neighbor Directory ({users.length})</h2>
+            <input
+              type="text"
+              placeholder="Search by name / email…"
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              className="w-44 rounded border border-slate-200 bg-white p-1.5 text-xs focus:outline-none focus:border-red-600"
+            />
+          </div>
+          {loading && <p className="text-xs text-slate-400">Loading users...</p>}
+          {!loading && users.length === 0 ? (
+            <p className="text-xs text-slate-400 italic bg-white p-4 rounded text-center border">
+              No registered users yet.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+              {users
+                .filter(
+                  (u) =>
+                    !userFilter.trim() ||
+                    u.name.toLowerCase().includes(userFilter.toLowerCase()) ||
+                    u.email.toLowerCase().includes(userFilter.toLowerCase())
+                )
+                .map((u) => (
+                  <div key={u.id} className="rounded border border-slate-100 bg-white p-2.5 text-[11px] shadow-sm flex justify-between items-center gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 truncate">
+                        {u.name}{' '}
+                        {u.role === 'admin' && (
+                          <span className="ml-1 bg-red-50 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Super Admin</span>
+                        )}
+                        {u.role === 'owner' && (
+                          <span className="ml-1 bg-emerald-50 text-emerald-600 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">Owner</span>
+                        )}
+                      </p>
+                      <p className="text-slate-400 truncate">{u.email}</p>
+                      <p className="text-[10px] text-slate-400">
+                        📜 {u.postCount} posts · 💬 {u.messageCount} chats · ⭐ {u.points} pts
+                      </p>
+                    </div>
+                    <Link
+                      to={`/users/${u.id}`}
+                      className="shrink-0 bg-indigo-50 text-primary hover:bg-indigo-100 font-bold text-[10px] px-2.5 py-1.5 rounded"
+                    >
+                      View Profile
+                    </Link>
+                  </div>
+                ))}
             </div>
           )}
         </div>

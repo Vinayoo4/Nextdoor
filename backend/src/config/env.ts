@@ -20,6 +20,7 @@ export const env = {
     .map((s) => s.trim())
     .filter(Boolean) ?? ['http://localhost:5173'],
   superAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? '',
+  clerkSecretKey: process.env.CLERK_SECRET_KEY ?? '',
   emailProvider: process.env.EMAIL_PROVIDER ?? 'console',
   resendApiKey: process.env.RESEND_API_KEY ?? '',
   resendApiUrl: process.env.RESEND_API_URL ?? 'https://api.resend.com/emails',

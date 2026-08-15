@@ -198,6 +198,45 @@ export interface User {
   savedPlaces: string[]
 }
 
+export interface UserProfileEntry {
+  id: string
+  content: string
+  type?: 'text' | 'paste'
+  channelId?: string
+  channelName?: string
+  circleId?: string
+  circleName?: string
+  createdAt: string | null
+  expiresAt?: string | null
+}
+
+export interface UserProfile {
+  user: {
+    id: string
+    name: string
+    email: string
+    role: 'user' | 'owner' | 'admin'
+    points: number
+    createdAt: string | null
+  }
+  masked: boolean
+  isSelf: boolean
+  stats: { posts: number; messages: number }
+  timeline: UserProfileEntry[]
+  chats: UserProfileEntry[]
+}
+
+export interface AdminUserEntry {
+  id: string
+  name: string
+  email: string
+  role: 'user' | 'owner' | 'admin'
+  points: number
+  createdAt: string | null
+  postCount: number
+  messageCount: number
+}
+
 export interface AuthResponse {
   token: string
   user: User

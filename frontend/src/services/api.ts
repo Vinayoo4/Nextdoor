@@ -259,6 +259,13 @@ export const adminApi = {
     api.patch<{ ok: boolean }>(`/api/admin/business-claims/${id}`, { status, adminNote }),
   getVerificationLog: () =>
     api.get<{ logs: any[] }>('/api/admin/verification-log'),
+  listUsers: () =>
+    api.get<{ users: import('@/types').AdminUserEntry[]; total: number }>('/api/admin/users'),
+}
+
+export const usersApi = {
+  getProfile: (id: string) =>
+    api.get<import('@/types').UserProfile>(`/api/users/${id}`),
 }
 
 export const articlesApi = {

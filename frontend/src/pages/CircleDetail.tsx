@@ -4,6 +4,7 @@ import { circlesApi, messagesApi, pastesApi } from '@/services/api'
 import { localDb } from '@/services/localDb'
 import { useAuthStore } from '@/stores/auth'
 import { Spinner, ErrorBox } from '@/components/UI'
+import UserLink from '@/components/UserLink'
 import { timeAgo } from '@/utils/format'
 
 export default function CircleDetail() {
@@ -625,7 +626,9 @@ export default function CircleDetail() {
                 </span>
                 <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-slate-100 px-3 py-2">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className="text-xs font-bold text-slate-700">{m.author_name || m.authorName}</p>
+                    <p className="text-xs font-bold text-slate-700">
+                      <UserLink userId={m.user_id || m.userId} name={m.author_name || m.authorName} />
+                    </p>
                     <div className="flex items-center gap-1">
                       {m.expires_at && (
                         <span className="text-[9px] text-red-500 font-bold bg-red-50 border border-red-200 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0" title="Disappearing message">
@@ -898,7 +901,9 @@ export default function CircleDetail() {
                 {members.map((m) => (
                   <div key={m.userId} className="flex justify-between items-center bg-slate-50 border p-2 rounded-lg text-xs">
                     <div>
-                      <p className="font-bold text-slate-850">{m.name} {m.userId === currentUser?.id && '(You)'}</p>
+                      <p className="font-bold text-slate-850">
+                        <UserLink userId={m.userId} name={m.name} /> {m.userId === currentUser?.id && '(You)'}
+                      </p>
                       <p className="text-[10px] text-slate-400 capitalize">{m.role.replace('_', ' ')}</p>
                     </div>
                     {m.userId !== currentUser?.id && (

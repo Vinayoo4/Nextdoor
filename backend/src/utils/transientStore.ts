@@ -100,6 +100,20 @@ export const transientStore = {
     return false
   },
 
+  // Gather all non-expired in-memory messages authored by a user (across channels)
+  getMessagesByUserId(userId: string): TransientMessage[] {
+    const now = new Date()
+    const result: TransientMessage[] = []
+    for (const list of Object.values(messagesCache)) {
+      for (const m of list) {
+        if (m.user_id !== userId) continue
+        if (m.expires_at && new Date(m.expires_at) <= now) continue
+        result.push(m)
+      }
+    }
+    return result
+  },
+
   // Posts
   getPosts(lat?: number, lng?: number, radiusKm: number = 5): TransientPost[] {
     if (lat !== undefined && lng !== undefined) {

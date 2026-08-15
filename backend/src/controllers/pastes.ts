@@ -3,6 +3,7 @@ import type { Request, Response } from 'express'
 import { channelRepository } from '../database/repositories/channelRepository'
 import { circleRepository } from '../database/repositories/circleRepository'
 import { userRepository } from '../database/repositories/userRepository'
+import { messageRepository } from '../database/repositories/messageRepository'
 import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
@@ -100,8 +101,9 @@ export const createPaste = asyncHandler(async (req: Request, res: Response) => {
   let message = null
   if (verifiedChannelId) {
     const user = userRepository.findById(userId)
+    const messageId = generateId()
     message = transientStore.addMessage({
-      id: generateId(),
+      id: messageId,
       channel_id: verifiedChannelId,
       user_id: userId,
       author_name: user?.name || 'Guest User',
@@ -110,6 +112,21 @@ export const createPaste = asyncHandler(async (req: Request, res: Response) => {
       paste_id: paste.id,
       expires_at: expiresAt ? expiresAt.toISOString() : null
     })
+    // Persist the chat message to SQLite for history / super admin access.
+    try {
+      messageRepository.create({
+        id: messageId,
+        channel_id: verifiedChannelId,
+        user_id: userId,
+        author_name: user?.name || 'Guest User',
+        content: title || filename || 'Shared a paste',
+        type: 'paste',
+        paste_id: paste.id,
+        expires_at: expiresAt
+      })
+    } catch (e) {
+      console.error('Failed to persist paste message to DB:', e)
+    }
   }
 
   res.status(201).json({

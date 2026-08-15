@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { authApi, api } from '@/services/api'
 import { useOnline } from '@/hooks/useOnline'
-import { useUser } from '@clerk/react'
+import { useUser, useAuth } from '@clerk/react'
 import Layout from '@/components/Layout'
 import OfflineBanner from '@/components/OfflineBanner'
 import Landing from '@/pages/Landing'
@@ -20,6 +20,7 @@ import CircleCreate from '@/pages/CircleCreate'
 import CircleDetail from '@/pages/CircleDetail'
 import Emergency from '@/pages/Emergency'
 import Profile from '@/pages/Profile'
+import UserProfile from '@/pages/UserProfile'
 import Offline from '@/pages/Offline'
 import OwnerDashboard from '@/pages/OwnerDashboard'
 import AuthorityPortal from '@/pages/AuthorityPortal'
@@ -58,28 +59,32 @@ function SessionBootstrap() {
   const setUser = useAuthStore((s) => s.setUser)
   const clear = useAuthStore((s) => s.clear)
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser()
+  const { isLoaded: authLoaded, getToken } = useAuth()
 
   useEffect(() => {
-    if (!clerkLoaded) return
+    if (!clerkLoaded || !authLoaded) return
 
     if (clerkUser) {
       const email = clerkUser.primaryEmailAddress?.emailAddress
-      const name = clerkUser.fullName || clerkUser.firstName || email?.split('@')[0]
-      if (email && (!token || useAuthStore.getState().user?.email !== email)) {
-        api.post<{ token: string; user: any }>('/api/auth/clerk-sync', { email, name })
-          .then((res) => {
+      const run = async () => {
+        try {
+          const sessionToken = await getToken()
+          if (!sessionToken) return
+          if (email && (!token || useAuthStore.getState().user?.email !== email)) {
+            const res = await api.post<{ token: string; user: any }>('/api/auth/clerk-sync', { sessionToken })
             useAuthStore.getState().setAuth(res.token, res.user)
-          })
-          .catch((err) => {
-            console.error('Failed to sync Clerk session:', err)
-          })
+          }
+        } catch (err) {
+          console.error('Failed to sync Clerk session:', err)
+        }
       }
+      run()
     } else {
       if (token) {
         clear()
       }
     }
-  }, [clerkUser, clerkLoaded, token, clear])
+  }, [clerkUser, clerkLoaded, authLoaded, getToken, token, clear])
 
   useEffect(() => {
     if (!token) return
@@ -151,6 +156,7 @@ export default function App() {
           <Route path="/businesses/new" element={<BusinessCreate />} />
           <Route path="/circles/new" element={<CircleCreate />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/users/:id" element={<UserProfile />} />
           <Route path="/owner" element={<OwnerDashboard />} />
           <Route path="/authority" element={<AuthorityPortal />} />
         </Route>

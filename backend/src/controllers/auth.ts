@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
+import { createClerkClient, verifyToken } from '@clerk/backend'
 import { userRepository } from '../database/repositories/userRepository'
 import { otpRepository } from '../database/repositories/otpRepository'
 import { hashPassword, verifyPassword } from '../utils/hash'
@@ -108,21 +109,51 @@ export const logout = (_req: Request, res: Response) => {
 }
 
 const clerkSyncSchema = z.object({
-  email: z.string().email('Invalid email'),
-  name: z.string().optional(),
+  sessionToken: z.string().min(1, 'Clerk session token is required'),
 })
 
 export const clerkSync = asyncHandler(async (req: Request, res: Response) => {
-  const { email, name } = parseBody(req, clerkSyncSchema)
-  const emailNorm = email.toLowerCase().trim()
+  const { sessionToken } = parseBody(req, clerkSyncSchema)
+
+  if (!env.clerkSecretKey) {
+    throw new ApiError(500, 'Clerk is not configured on the server (CLERK_SECRET_KEY missing)')
+  }
+
+  // Verify the Clerk session JWT server-side. The token is only issued by Clerk
+  // after the email verification code has been completed, so a valid token is
+  // proof that the user really owns that email address.
+  const clerkClient = createClerkClient({ secretKey: env.clerkSecretKey })
+  let claims: { sub?: string }
+  try {
+    claims = await verifyToken(sessionToken, { secretKey: env.clerkSecretKey })
+  } catch {
+    throw new ApiError(401, 'Invalid or expired Clerk session token')
+  }
+
+  if (!claims.sub) {
+    throw new ApiError(401, 'Clerk session token missing user id')
+  }
+
+  // Resolve the verified Clerk user to get their primary email + full name.
+  const clerkUser = await clerkClient.users.getUser(claims.sub)
+  const emailNorm = (clerkUser.primaryEmailAddress?.emailAddress ?? '').toLowerCase().trim()
+  if (!emailNorm) {
+    throw new ApiError(401, 'Clerk user has no verified primary email')
+  }
+
+  const firstName = clerkUser.firstName || ''
+  const lastName = clerkUser.lastName || ''
+  const name = [firstName, lastName].filter(Boolean).join(' ').trim() || emailNorm.split('@')[0]
 
   let user = userRepository.findByEmail(emailNorm)
   if (!user) {
     user = userRepository.create({
       email: emailNorm,
-      name: name || emailNorm.split('@')[0],
+      name,
       password_hash: '',
     })
+  } else if (name && name !== user.name) {
+    user = userRepository.update(user.id, { name }) ?? user
   }
 
   // Generate a standard JWT auth token for the app's local requests

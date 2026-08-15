@@ -15,6 +15,7 @@ export interface Post {
 }
 
 export interface CreatePostInput {
+  id?: string
   user_id: string
   author_name: string
   content: string
@@ -83,7 +84,7 @@ export class PostRepository extends BaseRepository {
   }
 
   create(input: CreatePostInput): Post {
-    const id = generateId()
+    const id = input.id || generateId()
     const timestamp = now()
     
     this.executeRun(

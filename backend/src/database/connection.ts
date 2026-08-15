@@ -109,6 +109,17 @@ export function runMigrations(): void {
     console.error("Migration error businesses priority:", e);
   }
 
+  try {
+    const messagesInfo = database.pragma("table_info(messages)") as any[];
+    const hasExpiresAt = messagesInfo.some((col: any) => col.name === 'expires_at');
+    if (!hasExpiresAt && messagesInfo.length > 0) {
+      database.exec("ALTER TABLE messages ADD COLUMN expires_at DATETIME;");
+      console.log("[db migration] Added expires_at column to messages");
+    }
+  } catch (e) {
+    console.error("Migration error messages expires_at:", e);
+  }
+
   const schema = getSchema()
   
   for (const statement of schema) {
@@ -362,7 +373,8 @@ function getSchema(): string[] {
       paste_id TEXT REFERENCES pastes(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      deleted_at DATETIME
+      deleted_at DATETIME,
+      expires_at DATETIME
     )`,
 
     `CREATE TABLE IF NOT EXISTS buildings (

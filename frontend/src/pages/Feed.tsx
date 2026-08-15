@@ -3,6 +3,7 @@ import { postsApi, nearbyApi } from '@/services/api'
 import { localDb } from '@/services/localDb'
 import { useAuthStore } from '@/stores/auth'
 import { Spinner, ErrorBox, EmptyState } from '@/components/UI'
+import UserLink from '@/components/UserLink'
 import { timeAgo, REWARI_CENTER } from '@/utils/format'
 
 export default function Feed() {
@@ -214,7 +215,7 @@ export default function Feed() {
             {nearbyPeers.map((peer) => (
               <div key={peer.userId} className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border text-xs shrink-0">
                 <span className="h-4 w-4 bg-green-500 rounded-full inline-block animate-pulse"></span>
-                <span className="font-semibold text-slate-800">{peer.name}</span>
+                <UserLink userId={peer.userId} name={peer.name} className="font-semibold text-slate-800" />
                 <button
                   onClick={handlePeerSync}
                   className="text-[10px] text-primary font-bold ml-1 hover:underline"
@@ -259,7 +260,9 @@ export default function Feed() {
                     {p.author_name ? p.author_name[0]?.toUpperCase() : p.authorName?.[0]?.toUpperCase() || 'U'}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">{p.author_name || p.authorName}</p>
+                    <p className="text-sm font-semibold text-slate-800">
+                      <UserLink userId={p.user_id || p.userId} name={p.author_name || p.authorName} />
+                    </p>
                     <p className="text-xs text-slate-400">{timeAgo(p.created_at || p.createdAt)}</p>
                   </div>
                 </div>

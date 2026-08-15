@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Request, Response } from 'express'
 import { userRepository } from '../database/repositories/userRepository'
+import { postRepository } from '../database/repositories/postRepository'
 import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
@@ -44,8 +45,9 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
   const user = userRepository.findById(userId)
 
   // Save to transientStore in-memory cache
+  const postId = generateId()
   const post = transientStore.addPost({
-    id: generateId(),
+    id: postId,
     content,
     user_id: userId,
     author_name: user?.name || 'Neighbor',
@@ -53,6 +55,21 @@ export const createPost = asyncHandler(async (req: Request, res: Response) => {
     location_lat: lat || null,
     location_lng: lng || null,
   })
+
+  // Persist to SQLite so the timeline history survives restarts.
+  try {
+    postRepository.create({
+      id: postId,
+      user_id: userId,
+      author_name: user?.name || 'Neighbor',
+      content,
+      image_url: imageUrl || undefined,
+      location_lat: lat || undefined,
+      location_lng: lng || undefined,
+    })
+  } catch (e) {
+    console.error('Failed to persist post to DB:', e)
+  }
 
   res.status(201).json({ post })
 })
@@ -75,6 +92,11 @@ export const deletePost = asyncHandler(async (req: Request, res: Response) => {
   }
 
   transientStore.deletePost(post.id)
+  try {
+    postRepository.softDelete(post.id)
+  } catch (e) {
+    console.error('Failed to soft-delete post in DB:', e)
+  }
   res.json({ ok: true })
 })
 

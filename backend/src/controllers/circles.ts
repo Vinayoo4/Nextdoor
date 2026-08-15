@@ -3,6 +3,7 @@ import type { Request, Response } from 'express'
 import { circleRepository } from '../database/repositories/circleRepository'
 import { channelRepository } from '../database/repositories/channelRepository'
 import { userRepository } from '../database/repositories/userRepository'
+import { messageRepository } from '../database/repositories/messageRepository'
 import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
@@ -362,8 +363,9 @@ export const createMessage = asyncHandler(async (req: Request, res: Response) =>
   const user = userRepository.findById(userId)
   const expiresAt = calculateExpiresAt(expiresIn)
 
+  const messageId = generateId()
   const message = transientStore.addMessage({
-    id: generateId(),
+    id: messageId,
     content,
     channel_id: channel.id,
     user_id: userId,
@@ -372,6 +374,22 @@ export const createMessage = asyncHandler(async (req: Request, res: Response) =>
     paste_id: null,
     expires_at: expiresAt ? expiresAt.toISOString() : null
   })
+
+  // Persist to SQLite so history survives restarts and is available to the super admin.
+  try {
+    messageRepository.create({
+      id: messageId,
+      content,
+      channel_id: channel.id,
+      user_id: userId,
+      author_name: user?.name || 'Neighbor',
+      type: 'text',
+      paste_id: undefined,
+      expires_at: expiresAt
+    })
+  } catch (e) {
+    console.error('Failed to persist message to DB:', e)
+  }
 
   res.status(201).json({ message })
 })
@@ -428,5 +446,10 @@ export const deleteMessage = asyncHandler(async (req: Request, res: Response) =>
   }
 
   transientStore.deleteMessage(channelId, messageId)
+  try {
+    messageRepository.softDelete(messageId)
+  } catch (e) {
+    console.error('Failed to soft-delete message in DB:', e)
+  }
   res.json({ ok: true })
 })
