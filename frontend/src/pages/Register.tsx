@@ -32,8 +32,12 @@ export default function Register() {
       const firstName = parts[0] || 'User'
       const lastName = parts.slice(1).join(' ') || ''
 
+      // Generate a strong dummy password to satisfy password requirements on the Clerk instance
+      const dummyPassword = `NextdoorPass99!_${Math.random().toString(36).slice(2)}`
+
       await signUp.create({
         emailAddress: email.trim(),
+        password: dummyPassword,
         firstName,
         lastName,
       })
@@ -64,7 +68,8 @@ export default function Register() {
         // to sync the user info with the local backend and set local session tokens!
         navigate('/home', { replace: true })
       } else {
-        setError('Sign up incomplete. Please try again.')
+        const missing = result.missingFields ? result.missingFields.join(', ') : 'unknown'
+        setError(`Sign up incomplete (Status: ${result.status}, Missing: ${missing}). Please try again.`)
       }
     } catch (err: any) {
       setError(err.errors?.[0]?.message || err.message || 'Registration failed')
