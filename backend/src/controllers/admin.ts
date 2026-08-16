@@ -93,3 +93,36 @@ export const getVerificationLog = asyncHandler(async (req: Request, res: Respons
 
   res.json({ logs: rows })
 })
+
+export const getAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+  const db = getDatabase()
+  const rows = db.prepare(
+    `SELECT a.*, u.name as user_name, u.email as user_email FROM api_audit_logs a
+     LEFT JOIN users u ON a.user_id = u.id
+     ORDER BY a.created_at DESC LIMIT 200`
+  ).all() as any[]
+
+  const logs = rows.map((r: any) => {
+    let parsedHeaders = {}
+    let parsedQuery = {}
+    try { parsedHeaders = JSON.parse(r.headers || '{}') } catch {}
+    try { parsedQuery = JSON.parse(r.query || '{}') } catch {}
+    
+    return {
+      id: r.id,
+      method: r.method,
+      url: r.url,
+      statusCode: r.status_code,
+      responseTime: r.response_time,
+      ip: r.ip,
+      userId: r.user_id,
+      userName: r.user_name || 'Anonymous / Guest',
+      userEmail: r.user_email || '—',
+      headers: parsedHeaders,
+      query: parsedQuery,
+      createdAt: r.created_at
+    }
+  })
+
+  res.json({ logs })
+})

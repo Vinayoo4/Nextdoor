@@ -10,6 +10,7 @@ import { runMigrations, getDatabase } from './database/connection'
 import { env } from './config/env'
 import routes from './routes'
 import { errorHandler, notFoundHandler } from './utils/errors'
+import { verifyToken } from './utils/jwt'
 
 const app = express()
 
@@ -31,6 +32,66 @@ app.use((req, res, next) => {
   const reqId = req.headers['x-request-id'] || randomUUID()
   ;(req as any).id = reqId
   res.setHeader('x-request-id', reqId)
+  next()
+})
+
+// API Request/Response audit logs middleware
+app.use((req, res, next) => {
+  const start = Date.now()
+
+  res.on('finish', () => {
+    if (
+      req.url === '/api/health' ||
+      req.url === '/health' ||
+      req.url.startsWith('/api/admin/audit-logs') ||
+      req.url.endsWith('.js') ||
+      req.url.endsWith('.css') ||
+      req.url.endsWith('.png') ||
+      req.url.endsWith('.ico')
+    ) {
+      return
+    }
+
+    try {
+      const responseTime = Date.now() - start
+      const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1'
+      
+      let userId = ''
+      if (req.headers.authorization) {
+        try {
+          const token = req.headers.authorization.split(' ')[1]
+          if (token) {
+            const decoded = verifyToken(token)
+            userId = decoded.userId
+          }
+        } catch {}
+      }
+
+      const db = getDatabase()
+      const isPg = require('./database/connection').isPg
+      const id = randomUUID()
+
+      const headersJson = JSON.stringify(req.headers)
+      const queryJson = JSON.stringify(req.query)
+
+      db.prepare(`
+        INSERT INTO api_audit_logs (id, method, url, status_code, response_time, ip, user_id, headers, query, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${isPg ? 'CURRENT_TIMESTAMP' : "datetime('now')"})
+      `).run(id, req.method, req.originalUrl || req.url, res.statusCode, responseTime, ip, userId, headersJson, queryJson)
+
+      db.prepare(`
+        DELETE FROM api_audit_logs 
+        WHERE id NOT IN (
+          SELECT id FROM api_audit_logs 
+          ORDER BY created_at DESC 
+          LIMIT 500
+        )
+      `).run()
+    } catch (e) {
+      console.error('Failed to log API audit record:', e)
+    }
+  })
+
   next()
 })
 

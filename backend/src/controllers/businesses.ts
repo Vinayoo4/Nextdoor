@@ -314,7 +314,6 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   if (!user) throw new ApiError(404, 'User not found')
   res.json({ user: serializeUser(user) })
 })
-
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireUserId(req)
   const { name, email } = parseBody(
@@ -327,13 +326,19 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   const user = userRepository.findById(userId)
   if (!user) throw new ApiError(404, 'User not found')
 
+  if (name && name !== user.name) {
+    const taken = userRepository.findByName(name)
+    if (taken && taken.id !== userId) {
+      throw new ApiError(400, 'Username is already taken')
+    }
+  }
+
   const updated = userRepository.update(userId, {
     name,
     email: email || undefined
   })!
   res.json({ user: serializeUser(updated) })
 })
-
 export const deleteBusiness = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireUserId(req)
   const business = businessRepository.findById(req.params.id)

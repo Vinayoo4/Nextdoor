@@ -85,6 +85,10 @@ export interface Circle {
   name: string
   description: string
   channelCount: number
+  hasPin?: boolean
+  pin?: string
+  isMember?: boolean
+  role?: 'admin' | 'co_admin' | 'elder' | 'member' | null
   createdAt: string
 }
 
@@ -92,6 +96,8 @@ export interface Channel {
   id: string
   name: string
   circleId: string
+  hasPin?: boolean
+  pin?: string
   createdAt: string
 }
 
@@ -187,6 +193,9 @@ export interface UserProfile {
     email: string
     role: 'user' | 'owner' | 'admin'
     points: number
+    lastSeenAt?: string | null
+    lastLat?: number | null
+    lastLng?: number | null
     createdAt: string | null
   }
   masked: boolean
@@ -194,6 +203,19 @@ export interface UserProfile {
   stats: { posts: number; messages: number }
   timeline: UserProfileEntry[]
   chats: UserProfileEntry[]
+  connectionLogs?: {
+    id: string
+    userId: string
+    ip: string
+    userAgent: string
+    deviceType: string
+    os: string
+    browser: string
+    lat: number | null
+    lng: number | null
+    connectedAt: string | null
+  }[]
+  loginCount?: number
 }
 
 export interface AdminUserEntry {
@@ -202,6 +224,9 @@ export interface AdminUserEntry {
   email: string
   role: 'user' | 'owner' | 'admin'
   points: number
+  lastSeenAt?: string | null
+  lastLat?: number | null
+  lastLng?: number | null
   createdAt: string | null
   postCount: number
   messageCount: number

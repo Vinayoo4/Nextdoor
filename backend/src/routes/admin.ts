@@ -13,5 +13,6 @@ router.get('/business-claims', adminController.listClaimRequests)
 router.patch('/business-claims/:id', adminController.reviewClaim)
 router.get('/verification-log', adminController.getVerificationLog)
 router.get('/users', listUsers)
+router.get('/audit-logs', adminController.getAuditLogs)
 
 export default router

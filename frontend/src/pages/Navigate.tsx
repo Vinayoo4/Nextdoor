@@ -106,7 +106,7 @@ export default function NavigatePage() {
   const routeGeoJSON = route?.geometry || route?.straightLine
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-[calc(100vh-13rem)] md:h-[calc(100vh-11rem)]">
       <div className="bg-white p-4 shadow-sm z-10 flex flex-col gap-1">
         <button onClick={() => navigate(-1)} className="text-sm font-semibold text-primary mb-2 flex items-center gap-1">
           ← Back

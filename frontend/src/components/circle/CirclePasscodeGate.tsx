@@ -36,6 +36,11 @@ export default function CirclePasscodeGate({
             <p className="text-xs text-slate-500">
               <b>{circle?.name}</b> is private. Enter the passcode/PIN code to join, or submit a request to the group owners.
             </p>
+            {circle?.pin && (
+              <p className="text-xs font-semibold text-primary mt-2 bg-primary/5 p-2 rounded-lg border border-primary/10 font-mono">
+                🔑 Super Admin Code: {circle.pin}
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleJoinCircleWithPin} className="space-y-4">
@@ -90,6 +95,11 @@ export default function CirclePasscodeGate({
             <p className="text-xs text-slate-500">
               For security, you must input the number passkey to enter <b>{circle.name}</b>.
             </p>
+            {circle?.pin && (
+              <p className="text-xs font-semibold text-primary mt-2 bg-primary/5 p-2 rounded-lg border border-primary/10 font-mono">
+                🔑 Super Admin Code: {circle.pin}
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleVerifyCirclePin} className="space-y-4">

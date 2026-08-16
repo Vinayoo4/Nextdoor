@@ -3,9 +3,11 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { localDb } from '@/services/localDb'
 import { timeAgo } from '@/utils/format'
+import { usersApi } from '@/services/api'
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user)
+  const setUser = useAuthStore((s) => s.setUser)
   const clear = useAuthStore((s) => s.clear)
   const navigate = useNavigate()
 
@@ -13,7 +15,13 @@ export default function Profile() {
   const [notes, setNotes] = useState<any[]>([])
   const [noteTitle, setNoteTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
-  const [activeTab, setActiveTab] = useState<'notes' | 'points' | 'activity' | 'backup'>('activity')
+  const [activeTab, setActiveTab] = useState<'notes' | 'points' | 'activity' | 'backup' | 'edit'>('activity')
+
+  // Edit profile state
+  const [editUsername, setEditUsername] = useState(user?.name || '')
+  const [updateError, setUpdateError] = useState('')
+  const [updateSuccess, setUpdateSuccess] = useState('')
+  const [updateLoading, setUpdateLoading] = useState(false)
 
   // Stats state
   const [postsCount, setPostsCount] = useState(0)
@@ -28,7 +36,27 @@ export default function Profile() {
   useEffect(() => {
     loadNotes()
     loadActivityLog()
+    if (user?.name) {
+      setEditUsername(user.name)
+    }
   }, [user])
+
+  async function handleUpdateProfile(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editUsername.trim()) return
+    setUpdateError('')
+    setUpdateSuccess('')
+    setUpdateLoading(true)
+    try {
+      const res = await usersApi.updateProfile(editUsername.trim())
+      setUser(res.user)
+      setUpdateSuccess('Profile updated successfully!')
+    } catch (err: any) {
+      setUpdateError(err.message || 'Failed to update profile')
+    } finally {
+      setUpdateLoading(false)
+    }
+  }
 
   async function loadNotes() {
     try {
@@ -174,17 +202,19 @@ export default function Profile() {
         <div>
           <h2 className="text-lg font-bold text-slate-850">{user?.name || 'Guest User'}</h2>
           <p className="text-sm text-slate-500">{user?.email}</p>
-          <span className="chip mt-1 bg-indigo-50 text-primary capitalize font-semibold">{user?.role}</span>
+          <span className="chip mt-1 bg-indigo-50 text-primary capitalize font-semibold">
+            {user?.role === 'admin' ? 'Super Admin' : user?.role}
+          </span>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b text-xs font-bold uppercase tracking-wider text-center">
+      <div className="flex border-b text-[10px] font-bold uppercase tracking-wider text-center">
         <button
           onClick={() => setActiveTab('activity')}
           className={`flex-1 pb-2.5 ${activeTab === 'activity' ? 'border-b-2 border-primary text-primary font-bold' : 'text-slate-500'}`}
         >
-          ⏱️ Contribution
+          ⏱️ Stats
         </button>
         <button
           onClick={() => setActiveTab('notes')}
@@ -203,6 +233,12 @@ export default function Profile() {
           className={`flex-1 pb-2.5 ${activeTab === 'backup' ? 'border-b-2 border-primary text-primary font-bold' : 'text-slate-500'}`}
         >
           💾 Backup
+        </button>
+        <button
+          onClick={() => setActiveTab('edit')}
+          className={`flex-1 pb-2.5 ${activeTab === 'edit' ? 'border-b-2 border-primary text-primary font-bold' : 'text-slate-500'}`}
+        >
+          ✏️ Edit
         </button>
       </div>
 
@@ -360,6 +396,36 @@ export default function Profile() {
             </div>
           </div>
         </div>
+      )}
+      {/* Tab: Edit Profile */}
+      {activeTab === 'edit' && (
+        <form onSubmit={handleUpdateProfile} className="card space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Edit Profile</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Update your display name/username on Nextdoor. Duplicate usernames are not allowed.
+            </p>
+          </div>
+
+          {updateSuccess && <p className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 p-2.5 rounded font-semibold">{updateSuccess}</p>}
+          {updateError && <p className="text-xs bg-red-50 border border-red-200 text-red-700 p-2.5 rounded font-semibold">{updateError}</p>}
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-slate-600">Username</label>
+            <input
+              type="text"
+              placeholder="Username"
+              value={editUsername}
+              onChange={(e) => setEditUsername(e.target.value)}
+              className="input text-xs"
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={updateLoading} className="btn-primary w-full text-xs">
+            {updateLoading ? 'Saving...' : 'Save Profile Changes'}
+          </button>
+        </form>
       )}
 
       <div className="space-y-2 pt-2">

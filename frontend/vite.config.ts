@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              urlPattern: /^https:\/\/[a-c]\.tile\.openstreetmap\.org\/.*/i,
+              urlPattern: /^https:\/\/.*\.tile\.openstreetmap\.org\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'osm-tiles-cache',
@@ -83,7 +83,7 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(import.meta.dirname, './src'),
       },
     },
     server: {

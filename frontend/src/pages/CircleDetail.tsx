@@ -67,13 +67,13 @@ export default function CircleDetail() {
         setEditName(res.circle.name)
         setEditDescription(res.circle.description || '')
         
+        const isSystemAdmin = useAuthStore.getState().user?.role === 'admin'
         // If the user is not a member, stop loading here so the Join / Request Gate (CASE 1) displays.
-        if (!res.circle.isMember) {
+        if (!res.circle.isMember && !isSystemAdmin) {
           setLoading(false)
           return
         }
         
-        const isSystemAdmin = res.circle.role === 'admin' && useAuthStore.getState().user?.role === 'admin'
         if (!res.circle.hasPin || isCircleUnlockedForSession || isSystemAdmin) {
           if (isSystemAdmin) {
             setIsCircleUnlockedForSession(true)
@@ -177,7 +177,8 @@ export default function CircleDetail() {
   }, [showManageModal, circle, id])
 
   const activeChannel = channels.find((c) => c.id === activeId)
-  const isChannelLocked = activeChannel?.hasPin && !unlockedChannelIds.includes(activeId || '')
+  const isSystemAdmin = useAuthStore.getState().user?.role === 'admin'
+  const isChannelLocked = activeChannel?.hasPin && !unlockedChannelIds.includes(activeId || '') && !isSystemAdmin
 
   // Unlock Circle via PIN (for session entry)
   async function handleVerifyCirclePin(e: React.FormEvent) {
@@ -382,7 +383,7 @@ export default function CircleDetail() {
   if (loading) return <Spinner />
 
   // CASE 1 & CASE 2: PIN passcode entry gates
-  if ((circle && !circle.isMember) || (circle && circle.hasPin && !isCircleUnlockedForSession)) {
+  if ((circle && !circle.isMember && !isSystemAdmin) || (circle && circle.hasPin && !isCircleUnlockedForSession && !isSystemAdmin)) {
     return (
       <CirclePasscodeGate
         circle={circle}
@@ -406,10 +407,10 @@ export default function CircleDetail() {
       </div>
     )
 
-  const isCoAdminOrAdmin = circle?.role === 'admin' || circle?.role === 'co_admin'
+  const isCoAdminOrAdmin = circle?.role === 'admin' || circle?.role === 'co_admin' || useAuthStore.getState().user?.role === 'admin'
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col px-4 pt-4">
+    <div className="flex h-[calc(100vh-13rem)] md:h-[calc(100vh-11rem)] flex-col">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold">{activeChannel?.name || 'Circle Details'}</h1>
@@ -435,7 +436,7 @@ export default function CircleDetail() {
               ch.id === activeId ? 'border-primary bg-primary text-white font-semibold' : 'border-slate-200 bg-white text-slate-600'
             }`}
           >
-            # {ch.name} {ch.hasPin && '🔒'}
+            # {ch.name} {ch.hasPin && (ch.pin ? `🔒 (PIN: ${ch.pin})` : '🔒')}
           </button>
         ))}
 
@@ -530,6 +531,19 @@ export default function CircleDetail() {
                     </div>
                   </div>
                   <p className="text-sm text-slate-800 leading-normal">{m.content}</p>
+                  {currentUser?.role === 'admin' && m.senderConnection && (
+                    <div className="mt-1 border-t border-slate-200/60 pt-1 text-[8.5px] font-mono text-indigo-700 leading-tight space-y-0.5">
+                      <div className="flex flex-wrap gap-x-2">
+                        <span>🔌 IP: {m.senderConnection.ip}</span>
+                        <span>🖥️ {m.senderConnection.deviceType} ({m.senderConnection.os} / {m.senderConnection.browser})</span>
+                      </div>
+                      {m.senderConnection.lat !== null && m.senderConnection.lng !== null && (
+                        <div className="font-semibold text-emerald-600">
+                          📍 Coords: [{m.senderConnection.lat.toFixed(5)}, {m.senderConnection.lng.toFixed(5)}]
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <p className="mt-0.5 text-right text-[10px] text-slate-400">{timeAgo(m.created_at || m.createdAt)}</p>
                 </div>
               </div>

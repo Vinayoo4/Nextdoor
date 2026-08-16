@@ -8,6 +8,9 @@ export interface User {
   role: 'user' | 'owner' | 'admin'
   locality_id: string | null
   points: number
+  last_seen_at: Date | null
+  last_lat: number | null
+  last_lng: number | null
   created_at: Date
   updated_at: Date
   deleted_at: Date | null
@@ -28,6 +31,9 @@ export interface UpdateUserInput {
   role?: 'user' | 'owner' | 'admin'
   locality_id?: string
   points?: number
+  last_seen_at?: Date | null
+  last_lat?: number | null
+  last_lng?: number | null
 }
 
 export class UserRepository extends BaseRepository {
@@ -35,12 +41,17 @@ export class UserRepository extends BaseRepository {
 
   findById(id: string): User | null {
     const row = this.executeQueryOne<User>(`SELECT * FROM ${this.table} WHERE id = ? AND deleted_at IS NULL`, [id])
-    return row ? this.deserializeDates(row) : null
+    return row ? this.deserializeDates(row, ['created_at', 'updated_at', 'deleted_at', 'last_seen_at']) : null
   }
 
   findByEmail(email: string): User | null {
     const row = this.executeQueryOne<User>(`SELECT * FROM ${this.table} WHERE email = ? AND deleted_at IS NULL`, [email.toLowerCase()])
-    return row ? this.deserializeDates(row) : null
+    return row ? this.deserializeDates(row, ['created_at', 'updated_at', 'deleted_at', 'last_seen_at']) : null
+  }
+
+  findByName(name: string): User | null {
+    const row = this.executeQueryOne<User>(`SELECT * FROM ${this.table} WHERE LOWER(name) = ? AND deleted_at IS NULL`, [name.toLowerCase().trim()])
+    return row ? this.deserializeDates(row, ['created_at', 'updated_at', 'deleted_at', 'last_seen_at']) : null
   }
 
   findAll(options: QueryOptions = {}): PaginatedResult<User> {
@@ -48,7 +59,7 @@ export class UserRepository extends BaseRepository {
     const { query, params } = this.buildSelectQuery(this.table, options, where)
     const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where)
     
-    const items = this.executeQuery<User>(query, params).map(r => this.deserializeDates(r))
+    const items = this.executeQuery<User>(query, params).map(r => this.deserializeDates(r, ['created_at', 'updated_at', 'deleted_at', 'last_seen_at']))
     const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
     
     return {
@@ -70,10 +81,18 @@ export class UserRepository extends BaseRepository {
       finalRole = 'user'
     }
 
+    // Auto-resolve username collisions by appending numbers if needed
+    let finalName = input.name.trim()
+    let attempts = 0
+    while (this.findByName(finalName)) {
+      attempts++
+      finalName = `${input.name.trim()}${Math.floor(Math.random() * 1000) || attempts}`
+    }
+
     this.executeRun(
       `INSERT INTO ${this.table} (id, email, name, password_hash, role, locality_id, points, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, emailNorm, input.name, input.password_hash, finalRole, input.locality_id || null, 0, timestamp, timestamp]
+      [id, emailNorm, finalName, input.password_hash, finalRole, input.locality_id || null, 0, timestamp, timestamp]
     )
     
     return this.findById(id)!
@@ -99,6 +118,14 @@ export class UserRepository extends BaseRepository {
     }
     if (input.locality_id !== undefined) { updates.push('locality_id = ?'); params.push(input.locality_id) }
     if (input.points !== undefined) { updates.push('points = ?'); params.push(input.points) }
+    
+    // New fields
+    if (input.last_seen_at !== undefined) {
+      updates.push('last_seen_at = ?')
+      params.push(input.last_seen_at ? input.last_seen_at.toISOString() : null)
+    }
+    if (input.last_lat !== undefined) { updates.push('last_lat = ?'); params.push(input.last_lat) }
+    if (input.last_lng !== undefined) { updates.push('last_lng = ?'); params.push(input.last_lng) }
 
     if (updates.length === 0) return existing
 
@@ -129,7 +156,7 @@ export class UserRepository extends BaseRepository {
     const { query, params } = this.buildSelectQuery(this.table, options, where, [localityId])
     const { query: countQuery, params: countParams } = this.buildCountQuery(this.table, where, [localityId])
     
-    const items = this.executeQuery<User>(query, params).map(r => this.deserializeDates(r))
+    const items = this.executeQuery<User>(query, params).map(r => this.deserializeDates(r, ['created_at', 'updated_at', 'deleted_at', 'last_seen_at']))
     const total = this.executeQueryOne<{ count: number }>(countQuery, countParams)?.count || 0
     
     return {

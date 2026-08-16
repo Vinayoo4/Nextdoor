@@ -42,7 +42,8 @@ export default function Circles() {
     }
 
     const localUnlocked = await localDb.isCircleUnlocked(c.id)
-    if (!c.hasPin || c.isMember || localUnlocked) {
+    const isSystemAdmin = useAuthStore.getState().user?.role === 'admin'
+    if (!c.hasPin || c.isMember || localUnlocked || isSystemAdmin) {
       navigate(`/circles/${c.id}`)
       return
     }
@@ -116,7 +117,10 @@ export default function Circles() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-base font-bold text-slate-800">{c.name}</h2>
                   {c.hasPin && !c.isMember && (
-                    <span className="text-sm" title="Locked Circle">🔒</span>
+                    <span className="flex items-center gap-1 text-[11px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                      <span>🔒</span>
+                      {c.pin && <span>PIN: {c.pin}</span>}
+                    </span>
                   )}
                   {c.isMember && (
                     <span className="chip bg-emerald-50 text-emerald-700 text-[10px] font-bold py-0.5 px-1.5 rounded">Joined</span>

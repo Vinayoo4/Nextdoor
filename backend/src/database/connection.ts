@@ -297,6 +297,27 @@ export function runMigrations(): void {
     console.error('Migration error messages expires_at:', e)
   }
 
+  try {
+    if (checkTableExists('users', isPg, database)) {
+      const realType = isPg ? 'DOUBLE PRECISION' : 'REAL'
+      if (!checkColumnExists('users', 'last_seen_at', isPg, database)) {
+        const dType = isPg ? 'TIMESTAMP' : 'DATETIME'
+        database.exec(`ALTER TABLE users ADD COLUMN last_seen_at ${dType};`)
+        console.log('[db migration] Added last_seen_at column to users')
+      }
+      if (!checkColumnExists('users', 'last_lat', isPg, database)) {
+        database.exec(`ALTER TABLE users ADD COLUMN last_lat ${realType};`)
+        console.log('[db migration] Added last_lat column to users')
+      }
+      if (!checkColumnExists('users', 'last_lng', isPg, database)) {
+        database.exec(`ALTER TABLE users ADD COLUMN last_lng ${realType};`)
+        console.log('[db migration] Added last_lng column to users')
+      }
+    }
+  } catch (e) {
+    console.error('Migration error users location columns:', e)
+  }
+
   const schema = getSchema(isPg)
   for (const statement of schema) {
     database.exec(statement)
@@ -327,6 +348,27 @@ export function runMigrations(): void {
       database.prepare(insertAdminSql).run(emailNorm)
     }
     console.log(`[db init] Verified/created Super Admin user with email: ${emailNorm}`)
+
+    // Ensure Super Admin is member of all existing circles
+    try {
+      const circlesList = database.prepare('SELECT id FROM circles').all() as { id: string }[]
+      for (const c of circlesList) {
+        const checkSql = 'SELECT COUNT(*) as count FROM circle_members WHERE circle_id = ? AND user_id = ?'
+        const row = database.prepare(checkSql).get(c.id, 'super_admin_id') as any
+        const count = row?.count ?? row?.countVal ?? 0
+        if (Number(count) === 0) {
+          const insertMemSql = `
+            INSERT INTO circle_members (id, circle_id, user_id, role, joined_at)
+            VALUES (?, ?, ?, 'admin', ${isPg ? 'CURRENT_TIMESTAMP' : "datetime('now')"})
+          `
+          const memId = Math.random().toString(36).substring(2, 15)
+          database.prepare(insertMemSql).run(memId, c.id, 'super_admin_id')
+        }
+      }
+      console.log('[db init] Super Admin verified as admin in all circles')
+    } catch (e) {
+      console.error('Error verifying Super Admin in existing circles:', e)
+    }
   }
 
   // Ensure default emergency contacts exist
@@ -456,6 +498,9 @@ function getSchema(isPg: boolean): string[] {
       role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','owner','admin')),
       locality_id TEXT,
       points INTEGER DEFAULT 0,
+      last_seen_at ${dType},
+      last_lat ${realType},
+      last_lng ${realType},
       created_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       updated_at ${dType} DEFAULT CURRENT_TIMESTAMP,
       deleted_at ${dType}
@@ -742,5 +787,34 @@ function getSchema(isPg: boolean): string[] {
     `CREATE INDEX IF NOT EXISTS idx_article_revisions_article ON article_revisions(article_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_saved_places_user ON user_saved_places(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_saved_places_business ON user_saved_places(business_id)`,
+
+    `CREATE TABLE IF NOT EXISTS user_connections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ip TEXT,
+      user_agent TEXT,
+      device_type TEXT,
+      os TEXT,
+      browser TEXT,
+      lat ${realType},
+      lng ${realType},
+      connected_at ${dType} DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_user_connections_user ON user_connections(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_connections_time ON user_connections(connected_at)`,
+
+    `CREATE TABLE IF NOT EXISTS api_audit_logs (
+      id TEXT PRIMARY KEY,
+      method TEXT NOT NULL,
+      url TEXT NOT NULL,
+      status_code INTEGER,
+      response_time INTEGER,
+      ip TEXT,
+      user_id TEXT,
+      headers TEXT,
+      query TEXT,
+      created_at ${dType} DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_api_audit_logs_time ON api_audit_logs(created_at)`
   ]
 }

@@ -7,6 +7,7 @@ import { circleRepository } from '../database/repositories/circleRepository'
 import { transientStore } from '../utils/transientStore'
 import { ApiError, asyncHandler } from '../utils/errors'
 import { requireUserId } from '../middleware/auth'
+import { getDatabase } from '../database/connection'
 
 const MASKED_CONTENT = 'xxxx'
 
@@ -47,6 +48,31 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
   const isAdmin = req.user?.role === 'admin'
   const canViewFull = isAdmin || isSelf
   const masked = !canViewFull
+
+  let connectionLogs: any[] = []
+  let loginCount = 0
+  if (isAdmin) {
+    try {
+      const db = getDatabase()
+      const rawLogs = db.prepare('SELECT * FROM user_connections WHERE user_id = ? ORDER BY connected_at DESC LIMIT 50').all(targetId) as any[]
+      connectionLogs = rawLogs.map((l) => ({
+        id: l.id,
+        userId: l.user_id,
+        ip: l.ip,
+        userAgent: l.user_agent,
+        deviceType: l.device_type,
+        os: l.os,
+        browser: l.browser,
+        lat: l.lat,
+        lng: l.lng,
+        connectedAt: fmtDate(l.connected_at)
+      }))
+      const countRow = db.prepare('SELECT COUNT(*) as count FROM user_connections WHERE user_id = ?').get(targetId) as any
+      loginCount = countRow?.count ?? countRow?.countVal ?? 0
+    } catch (e) {
+      console.error('Failed to query user connections:', e)
+    }
+  }
 
   // ---- Timeline (posts) ----
   const dbPosts = postRepository.findAll({ limit: 200, orderBy: 'created_at', orderDir: 'DESC' }, { user_id: targetId }).items
@@ -106,6 +132,9 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
       email,
       role: target.role,
       points: target.points ?? 0,
+      lastSeenAt: target.last_seen_at ? fmtDate(target.last_seen_at) : null,
+      lastLat: target.last_lat,
+      lastLng: target.last_lng,
       createdAt: fmtDate(target.created_at),
     },
     masked,
@@ -116,6 +145,8 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
     },
     timeline,
     chats,
+    connectionLogs,
+    loginCount
   })
 })
 
@@ -128,6 +159,9 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
     email: u.email,
     role: u.role,
     points: u.points ?? 0,
+    lastSeenAt: u.last_seen_at ? fmtDate(u.last_seen_at) : null,
+    lastLat: u.last_lat,
+    lastLng: u.last_lng,
     createdAt: fmtDate(u.created_at),
     postCount: postRepository.getUserPostCount(u.id),
     messageCount: messageRepository.getUserMessageCount(u.id),

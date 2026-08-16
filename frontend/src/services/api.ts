@@ -40,7 +40,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       let message = `Request failed (${res.status})`
       try {
         const data = await res.json()
-        if (data.error) message = data.error
+        if (data.error) {
+          message = typeof data.error === 'object' && data.error.message ? data.error.message : data.error
+        }
       } catch {
         // ignore
       }
@@ -216,11 +218,15 @@ export const adminApi = {
     api.get<{ logs: any[] }>('/api/admin/verification-log'),
   listUsers: () =>
     api.get<{ users: import('@/types').AdminUserEntry[]; total: number }>('/api/admin/users'),
+  getAuditLogs: () =>
+    api.get<{ logs: any[] }>('/api/admin/audit-logs'),
 }
 
 export const usersApi = {
   getProfile: (id: string) =>
     api.get<import('@/types').UserProfile>(`/api/users/${id}`),
+  updateProfile: (name: string, email?: string) =>
+    api.patch<{ user: import('@/types').User }>('/api/users/me', { name, email }),
 }
 
 export const articlesApi = {

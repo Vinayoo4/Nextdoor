@@ -87,6 +87,44 @@ export default function UserProfile() {
         </div>
       )}
 
+      {/* Super Admin Connection Metadata & Access Logs */}
+      {isAdmin && data.connectionLogs && (
+        <section className="card bg-slate-50 border border-indigo-100 p-4 space-y-3.5">
+          <div className="flex justify-between items-center border-b pb-2">
+            <h2 className="text-sm font-extrabold text-indigo-950 uppercase tracking-wide">
+              🛡️ Geolocation & Device Connection Log
+            </h2>
+            <span className="text-[10px] font-extrabold px-2 py-0.5 bg-indigo-100 text-primary rounded-full uppercase">
+              Total Connections: {data.loginCount ?? 0}
+            </span>
+          </div>
+
+          {data.connectionLogs.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3 text-center">No connection log records available yet.</p>
+          ) : (
+            <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+              {data.connectionLogs.map((log) => (
+                <div key={log.id} className="text-[11px] bg-white border border-slate-200 p-2.5 rounded-xl space-y-1.5 shadow-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-700">🖥️ Device: {log.deviceType} ({log.os} / {log.browser})</span>
+                    <span className="text-slate-400 text-[10px]">{log.connectedAt ? new Date(log.connectedAt).toLocaleString() : ''}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-slate-500 font-mono text-[10px]">
+                    <span>🔌 IP: {log.ip}</span>
+                    {log.lat !== null && log.lng !== null && (
+                      <span className="text-indigo-600 font-bold bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                        📍 Coords: [{log.lat.toFixed(5)}, {log.lng.toFixed(5)}]
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-400 truncate" title={log.userAgent}>UserAgent: {log.userAgent}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Timeline (posts) */}
       <section>
         <h2 className="text-sm font-extrabold text-slate-700 mb-2">📜 Activity Timeline</h2>

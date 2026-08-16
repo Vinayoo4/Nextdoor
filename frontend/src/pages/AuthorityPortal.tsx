@@ -8,10 +8,14 @@ import ClaimRequestTable from '@/components/ClaimRequestTable'
 export default function AuthorityPortal() {
   const user = useAuthStore((s) => s.user)
 
-  const [activeTab, setActiveTab] = useState<'broadcast' | 'claims' | 'logs' | 'users'>('broadcast')
+  const [activeTab, setActiveTab] = useState<'broadcast' | 'claims' | 'logs' | 'users' | 'api_logs'>('broadcast')
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // API Audit logs states
+  const [apiLogs, setApiLogs] = useState<any[]>([])
+  const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null)
 
   // Claims states
   const [claims, setClaims] = useState<BusinessClaimRequest[]>([])
@@ -32,6 +36,8 @@ export default function AuthorityPortal() {
         loadLogs()
       } else if (activeTab === 'users') {
         loadUsers()
+      } else if (activeTab === 'api_logs') {
+        loadAuditLogs()
       }
     }
   }, [activeTab])
@@ -79,6 +85,19 @@ export default function AuthorityPortal() {
     }
   }
 
+  async function loadAuditLogs() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await adminApi.getAuditLogs()
+      setApiLogs(res.logs)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load API audit logs')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handlePost(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -118,10 +137,10 @@ export default function AuthorityPortal() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto pb-1 gap-1 scrollbar-hide">
         <button
           onClick={() => setActiveTab('broadcast')}
-          className={`flex-1 pb-2 text-center text-xs font-semibold border-b-2 ${
+          className={`px-3 pb-2 text-center text-xs font-semibold border-b-2 whitespace-nowrap ${
             activeTab === 'broadcast' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
           }`}
         >
@@ -129,7 +148,7 @@ export default function AuthorityPortal() {
         </button>
         <button
           onClick={() => setActiveTab('claims')}
-          className={`flex-1 pb-2 text-center text-xs font-semibold border-b-2 ${
+          className={`px-3 pb-2 text-center text-xs font-semibold border-b-2 whitespace-nowrap ${
             activeTab === 'claims' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
           }`}
         >
@@ -137,7 +156,7 @@ export default function AuthorityPortal() {
         </button>
         <button
           onClick={() => setActiveTab('logs')}
-          className={`flex-1 pb-2 text-center text-xs font-semibold border-b-2 ${
+          className={`px-3 pb-2 text-center text-xs font-semibold border-b-2 whitespace-nowrap ${
             activeTab === 'logs' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
           }`}
         >
@@ -145,11 +164,19 @@ export default function AuthorityPortal() {
         </button>
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex-1 pb-2 text-center text-xs font-semibold border-b-2 ${
+          className={`px-3 pb-2 text-center text-xs font-semibold border-b-2 whitespace-nowrap ${
             activeTab === 'users' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
           }`}
         >
           👥 Users
+        </button>
+        <button
+          onClick={() => setActiveTab('api_logs')}
+          className={`px-3 pb-2 text-center text-xs font-semibold border-b-2 whitespace-nowrap ${
+            activeTab === 'api_logs' ? 'border-red-600 text-red-700' : 'border-transparent text-slate-500'
+          }`}
+        >
+          ⚙️ API Server Logs
         </button>
       </div>
 
@@ -281,6 +308,12 @@ export default function AuthorityPortal() {
                       <p className="text-[10px] text-slate-400">
                         📜 {u.postCount} posts · 💬 {u.messageCount} chats · ⭐ {u.points} pts
                       </p>
+                      {u.lastSeenAt && (
+                        <p className="text-[9.5px] text-indigo-600 font-semibold mt-1">
+                          📍 Last active: {new Date(u.lastSeenAt).toLocaleString()}
+                          {typeof u.lastLat === 'number' && typeof u.lastLng === 'number' && ` from [${u.lastLat.toFixed(5)}, ${u.lastLng.toFixed(5)}]`}
+                        </p>
+                      )}
                     </div>
                     <Link
                       to={`/users/${u.id}`}
@@ -290,6 +323,87 @@ export default function AuthorityPortal() {
                     </Link>
                   </div>
                 ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* API Logs */}
+      {activeTab === 'api_logs' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-sm font-extrabold text-slate-800">⚙️ API Request/Response Logger</h2>
+            <button 
+              onClick={loadAuditLogs}
+              className="bg-red-50 text-red-700 hover:bg-red-100 text-[10px] font-bold px-2 py-1 rounded border border-red-100"
+              disabled={loading}
+            >
+              🔄 Refresh
+            </button>
+          </div>
+          {loading && <p className="text-xs text-slate-400">Loading audit log entries...</p>}
+          {!loading && apiLogs.length === 0 ? (
+            <p className="text-xs text-slate-400 italic bg-white p-4 rounded text-center border">
+              No API requests recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+              {apiLogs.map((log) => (
+                <div key={log.id} className="rounded-xl border border-slate-200 bg-white p-3 text-[11px] shadow-sm space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1.5 py-0.5 rounded font-extrabold text-[9px] uppercase ${
+                        log.method === 'GET' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        {log.method}
+                      </span>
+                      <span className="font-mono text-slate-800 font-bold truncate max-w-xs md:max-w-md" title={log.url}>
+                        {log.url}
+                      </span>
+                    </div>
+                    <span className={`font-mono font-extrabold px-1.5 py-0.5 rounded ${
+                      log.statusCode >= 400 
+                        ? 'bg-rose-50 text-rose-700' 
+                        : log.statusCode >= 300 
+                          ? 'bg-amber-50 text-amber-700' 
+                          : 'bg-emerald-50 text-emerald-700'
+                    }`}>
+                      {log.statusCode}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-slate-400 text-[9.5px] font-semibold">
+                    <span>⏱️ {log.responseTime}ms</span>
+                    <span>🔌 IP: {log.ip}</span>
+                    <span className="text-indigo-600">👤 {log.userName} ({log.userEmail})</span>
+                    <span className="text-slate-450">{new Date(log.createdAt).toLocaleString()}</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedAuditLog(selectedAuditLog?.id === log.id ? null : log)}
+                      className="text-indigo-600 hover:text-indigo-800 text-[9.5px] font-bold"
+                    >
+                      {selectedAuditLog?.id === log.id ? 'Hide Details ▲' : 'Inspect Headers & Session Log ▼'}
+                    </button>
+                  </div>
+
+                  {selectedAuditLog?.id === log.id && (
+                    <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-lg font-mono text-[9px] text-slate-700 space-y-2.5 overflow-x-auto">
+                      <div>
+                        <p className="font-bold text-slate-500 uppercase tracking-wider text-[8px] mb-1">Headers</p>
+                        <pre className="whitespace-pre-wrap leading-relaxed">{JSON.stringify(log.headers, null, 2)}</pre>
+                      </div>
+                      {Object.keys(log.query).length > 0 && (
+                        <div>
+                          <p className="font-bold text-slate-500 uppercase tracking-wider text-[8px] mb-1">Query Params</p>
+                          <pre className="whitespace-pre-wrap leading-relaxed">{JSON.stringify(log.query, null, 2)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -67,9 +67,9 @@ export default function ManageMembersModal({
   if (!showManageModal) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl border border-slate-150 space-y-5 my-8">
-        <div className="flex justify-between items-start">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl bg-white p-6 shadow-xl border border-slate-150 overflow-hidden">
+        <div className="flex justify-between items-start border-b pb-3">
           <div>
             <h3 className="text-base font-extrabold text-slate-800">⚙️ Group Management Panel</h3>
             <p className="text-xs text-slate-500">Configure security settings, resolve user requests, and promote members.</p>
@@ -80,17 +80,18 @@ export default function ManageMembersModal({
               setMgmtError('')
               setMgmtSuccess('')
             }}
-            className="text-slate-400 hover:text-slate-700 text-xl font-bold"
+            className="text-slate-400 hover:text-slate-700 text-xl font-bold ml-2 animate-pulse"
           >
             ×
           </button>
         </div>
 
-        {mgmtSuccess && <p className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 p-2.5 rounded-lg font-semibold">{mgmtSuccess}</p>}
-        {mgmtError && <p className="text-xs bg-red-50 border border-red-200 text-red-700 p-2.5 rounded-lg font-semibold">{mgmtError}</p>}
+        <div className="flex-1 overflow-y-auto pt-4 space-y-5 pr-1">
+          {mgmtSuccess && <p className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 p-2.5 rounded-lg font-semibold">{mgmtSuccess}</p>}
+          {mgmtError && <p className="text-xs bg-red-50 border border-red-200 text-red-700 p-2.5 rounded-lg font-semibold">{mgmtError}</p>}
 
         {/* Editable Group Settings (Personalization - Admin Only) */}
-        {circle?.role === 'admin' && (
+        {(circle?.role === 'admin' || currentUser?.role === 'admin') && (
           <form onSubmit={handleUpdateCircleDetails} className="space-y-3.5 border-b pb-4">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Group Details Personalization</h4>
             <div className="grid grid-cols-2 gap-2">
@@ -169,7 +170,9 @@ export default function ManageMembersModal({
                   <p className="font-bold text-slate-850">
                     <UserLink userId={m.userId} name={m.name} /> {m.userId === currentUser?.id && '(You)'}
                   </p>
-                  <p className="text-[10px] text-slate-400 capitalize">{m.role.replace('_', ' ')}</p>
+                  <p className="text-[10px] text-slate-400 capitalize">
+                    {m.role === 'admin' ? 'Super Admin' : m.role.replace('_', ' ')}
+                  </p>
                 </div>
                 {m.userId !== currentUser?.id && (
                   <select
@@ -179,8 +182,8 @@ export default function ManageMembersModal({
                   >
                     <option value="member">Member</option>
                     <option value="elder">Elder</option>
-                    {circle?.role === 'admin' && <option value="co_admin">Co-admin</option>}
-                    {circle?.role === 'admin' && <option value="admin">Transfer Admin</option>}
+                    {(circle?.role === 'admin' || currentUser?.role === 'admin') && <option value="co_admin">Co-admin</option>}
+                    {(circle?.role === 'admin' || currentUser?.role === 'admin') && <option value="admin">Transfer Admin</option>}
                   </select>
                 )}
               </div>
@@ -189,7 +192,7 @@ export default function ManageMembersModal({
         </div>
 
         {/* Settings PIN configurations (Admin Only) */}
-        {circle?.role === 'admin' && (
+        {(circle?.role === 'admin' || currentUser?.role === 'admin') && (
           <div className="space-y-3 pt-2">
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Group PIN Config</h4>
 
@@ -260,6 +263,7 @@ export default function ManageMembersModal({
             </button>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

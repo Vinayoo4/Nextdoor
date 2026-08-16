@@ -87,6 +87,15 @@ export class CircleRepository extends BaseRepository {
          VALUES (?, ?, ?, 'admin', ?)`,
         [generateId(), id, input.creator_id, timestamp]
       )
+
+      // Add Super Admin as secondary admin if creator is not Super Admin
+      if (input.creator_id !== 'super_admin_id') {
+        this.executeRun(
+          `INSERT INTO circle_members (id, circle_id, user_id, role, joined_at)
+           VALUES (?, ?, 'super_admin_id', 'admin', ?)`,
+          [generateId(), id, timestamp]
+        )
+      }
     })
     
     return this.findById(id)!

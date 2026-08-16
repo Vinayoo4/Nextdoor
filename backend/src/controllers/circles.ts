@@ -10,6 +10,7 @@ import { parseBody } from '../utils/validate'
 import { requireUserId } from '../middleware/auth'
 import { serializeChannel } from '../utils/serializers'
 import { generateId } from '../database/repositories/base'
+import { getDatabase } from '../database/connection'
 
 const createCircleSchema = z.object({
   name: z.string().min(1, 'Circle name is required').max(60),
@@ -50,6 +51,7 @@ export const listCircles = asyncHandler(async (req: Request, res: Response) => {
       channelCount: circleRepository.getChannelCount(c.id),
       createdAt: c.created_at,
       hasPin: !!c.pin,
+      pin: req.user?.role === 'admin' ? c.pin : undefined,
       isMember: isMem,
       role
     }
@@ -128,7 +130,8 @@ export const listCircleRequests = asyncHandler(async (req: Request, res: Respons
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const userRole = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const userRole = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
   if (userRole !== 'admin' && userRole !== 'co_admin') {
     throw new ApiError(403, 'Only admins and co-admins can review requests')
   }
@@ -145,7 +148,8 @@ export const resolveCircleRequest = asyncHandler(async (req: Request, res: Respo
   const circle = circleRepository.findById(circleId)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const userRole = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const userRole = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
   if (userRole !== 'admin' && userRole !== 'co_admin') {
     throw new ApiError(403, 'Only admins and co-admins can resolve requests')
   }
@@ -170,7 +174,8 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
   const circle = circleRepository.findById(circleId)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const userRole = circleRepository.getRole(circleId, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const userRole = isSystemAdmin ? 'admin' : circleRepository.getRole(circleId, userId)
   if (userRole !== 'admin' && userRole !== 'co_admin') {
     throw new ApiError(403, 'Only Admin and Co-admins can manage roles')
   }
@@ -187,16 +192,18 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
   if (role === 'admin') {
     // Transfer admin status: target becomes admin, caller becomes member/co_admin
     circleRepository.updateMemberRole(circleId, targetUserId, 'admin')
-    circleRepository.updateMemberRole(circleId, userId, 'co_admin')
+    if (!isSystemAdmin) {
+      circleRepository.updateMemberRole(circleId, userId, 'co_admin')
+    }
   } else if (role === 'co_admin') {
     const count = circleRepository.countMembersWithRole(circleId, 'co_admin')
-    if (count >= 3) {
+    if (count >= 3 && !isSystemAdmin) {
       throw new ApiError(400, 'Cannot have more than 3 co-admins in a circle')
     }
     circleRepository.updateMemberRole(circleId, targetUserId, 'co_admin')
   } else if (role === 'elder') {
     const count = circleRepository.countMembersWithRole(circleId, 'elder')
-    if (count >= 7) {
+    if (count >= 7 && !isSystemAdmin) {
       throw new ApiError(400, 'Cannot have more than 7 elders in a circle')
     }
     circleRepository.updateMemberRole(circleId, targetUserId, 'elder')
@@ -214,7 +221,8 @@ export const updateCirclePin = asyncHandler(async (req: Request, res: Response) 
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const userRole = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const userRole = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
   if (userRole !== 'admin') {
     throw new ApiError(403, 'Only the circle Admin can manage the PIN')
   }
@@ -233,7 +241,8 @@ export const updateCircle = asyncHandler(async (req: Request, res: Response) => 
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const userRole = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const userRole = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
   if (userRole !== 'admin') {
     throw new ApiError(403, 'Only the circle Admin can modify settings')
   }
@@ -274,13 +283,20 @@ export const listChannels = asyncHandler(async (req: Request, res: Response) => 
   const circle = circleRepository.findById(circleId)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const isMem = circleRepository.isMember(circleId, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const isMem = isSystemAdmin || circleRepository.isMember(circleId, userId)
   if (!isMem) {
     throw new ApiError(403, 'You must be a member to access these channels')
   }
 
   const result = channelRepository.findByCircleId(circleId, { limit: 100 })
-  res.json({ channels: result.items.map((ch) => ({ ...serializeChannel(ch), hasPin: !!ch.pin })) })
+  res.json({
+    channels: result.items.map((ch) => ({
+      ...serializeChannel(ch),
+      hasPin: !!ch.pin,
+      pin: isSystemAdmin ? ch.pin : undefined
+    }))
+  })
 })
 
 export const createChannel = asyncHandler(async (req: Request, res: Response) => {
@@ -289,7 +305,8 @@ export const createChannel = asyncHandler(async (req: Request, res: Response) =>
   const circle = circleRepository.findById(req.params.id)
   if (!circle) throw new ApiError(404, 'Circle not found')
 
-  const role = circleRepository.getRole(circle.id, userId)
+  const isSystemAdmin = req.user?.role === 'admin'
+  const role = isSystemAdmin ? 'admin' : circleRepository.getRole(circle.id, userId)
   if (role !== 'admin' && role !== 'co_admin') {
     throw new ApiError(403, 'Only Admin and Co-admins can create channels')
   }
@@ -315,13 +332,14 @@ export const verifyChannelPin = asyncHandler(async (req: Request, res: Response)
 export const updateChannelPin = asyncHandler(async (req: Request, res: Response) => {
   const userId = requireUserId(req)
   const { pin } = parseBody(req, z.object({ pin: z.string().max(20).optional().or(z.literal('')) }))
-
+  
   const channel = channelRepository.findById(req.params.id)
   if (!channel) throw new ApiError(404, 'Channel not found')
 
-  const circleRole = circleRepository.getRole(channel.circle_id, userId)
-  if (circleRole !== 'admin') {
-    throw new ApiError(403, 'Only the circle Admin can manage channel PINs')
+  const isSystemAdmin = req.user?.role === 'admin'
+  const circleRole = isSystemAdmin ? 'admin' : circleRepository.getRole(channel.circle_id, userId)
+  if (circleRole !== 'admin' && !isSystemAdmin) {
+    throw new ApiError(403, 'Only the circle Admin can manage channel security')
   }
 
   channelRepository.updatePin(channel.id, pin || null)
@@ -338,9 +356,39 @@ export const listMessages = asyncHandler(async (req: Request, res: Response) => 
     throw new ApiError(403, 'You must be a member of the circle to view chat')
   }
 
-  // Load transient in-memory messages instead of database
+  const isSystemAdmin = req.user?.role === 'admin'
   const messages = transientStore.getMessages(channel.id)
-  res.json({ messages })
+  
+  let enrichedMessages = messages
+  if (isSystemAdmin) {
+    try {
+      const db = getDatabase()
+      enrichedMessages = messages.map((m) => {
+        const authorId = m.user_id
+        if (authorId) {
+          const conn = db.prepare('SELECT ip, device_type, os, browser, lat, lng FROM user_connections WHERE user_id = ? ORDER BY connected_at DESC LIMIT 1').get(authorId) as any
+          if (conn) {
+            return {
+              ...m,
+              senderConnection: {
+                ip: conn.ip,
+                deviceType: conn.device_type,
+                os: conn.os,
+                browser: conn.browser,
+                lat: conn.lat,
+                lng: conn.lng
+              }
+            }
+          }
+        }
+        return m
+      })
+    } catch (e) {
+      console.error('Failed to enrich chat message metadata:', e)
+    }
+  }
+
+  res.json({ messages: enrichedMessages })
 })
 
 function calculateExpiresAt(expiresIn?: string): Date | null {
