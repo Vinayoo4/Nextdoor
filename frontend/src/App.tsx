@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { authApi, api } from '@/services/api'
+import { client as appwriteClient } from '@/services/appwrite'
 import { useOnline } from '@/hooks/useOnline'
 import { useUser, useAuth } from '@clerk/react'
 import Layout from '@/components/Layout'
@@ -106,6 +107,14 @@ function SessionBootstrap() {
 
 export default function App() {
   const online = useOnline()
+
+  useEffect(() => {
+    appwriteClient.ping().then(() => {
+      console.log('[appwrite] Setup successfully verified via ping response')
+    }).catch((err) => {
+      console.error('[appwrite] Setup ping failed:', err)
+    })
+  }, [])
 
   return (
     <>
