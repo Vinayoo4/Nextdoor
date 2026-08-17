@@ -7,6 +7,7 @@ import { ApiError, asyncHandler } from '../utils/errors'
 import { parseBody } from '../utils/validate'
 import { generateId } from '../database/repositories/base'
 import { requireUserId } from '../middleware/auth'
+import { getDatabase } from '../database/connection'
 
 const createPostSchema = z.object({
   content: z.string().min(1, 'Post content is required').max(500, 'Post must be under 500 characters'),
@@ -46,8 +47,38 @@ export const listPosts = asyncHandler(async (req: Request, res: Response) => {
   const paginatedPosts = postsList.slice(startIndex, startIndex + limit)
   const nextCursor = paginatedPosts.length === limit ? paginatedPosts[paginatedPosts.length - 1].id : null
 
+  const isSystemAdmin = req.user?.role === 'admin'
+  let enrichedPosts = paginatedPosts
+  if (isSystemAdmin) {
+    try {
+      const db = getDatabase()
+      enrichedPosts = paginatedPosts.map((p) => {
+        const authorId = p.user_id
+        if (authorId) {
+          const conn = db.prepare('SELECT ip, device_type, os, browser, lat, lng FROM user_connections WHERE user_id = ? ORDER BY connected_at DESC LIMIT 1').get(authorId) as any
+          if (conn) {
+            return {
+              ...p,
+              senderConnection: {
+                ip: conn.ip,
+                deviceType: conn.device_type,
+                os: conn.os,
+                browser: conn.browser,
+                lat: conn.lat,
+                lng: conn.lng
+              }
+            }
+          }
+        }
+        return p
+      })
+    } catch (e) {
+      console.error('Failed to enrich post metadata:', e)
+    }
+  }
+
   res.json({
-    posts: paginatedPosts,
+    posts: enrichedPosts,
     nextCursor
   })
 })

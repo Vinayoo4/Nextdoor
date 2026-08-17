@@ -48,6 +48,14 @@ export interface Post {
   createdAt: string
   userId: string
   location: LatLng | null
+  senderConnection?: {
+    ip: string
+    deviceType: string
+    os: string
+    browser: string
+    lat: number | null
+    lng: number | null
+  }
 }
 
 export interface Comment {

@@ -276,6 +276,19 @@ export default function Feed() {
                 )}
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{p.content}</p>
+              {currentUser?.role === 'admin' && p.senderConnection && (
+                <div className="mt-3 border-t border-slate-100 pt-2 text-[10px] font-mono text-indigo-700 leading-tight space-y-0.5">
+                  <div className="flex flex-wrap gap-x-2">
+                    <span>🔌 IP: {p.senderConnection.ip}</span>
+                    <span>🖥️ {p.senderConnection.deviceType} ({p.senderConnection.os} / {p.senderConnection.browser})</span>
+                  </div>
+                  {p.senderConnection.lat !== null && p.senderConnection.lng !== null && (
+                    <div className="font-semibold text-emerald-600">
+                      📍 Coords: [{p.senderConnection.lat.toFixed(5)}, {p.senderConnection.lng.toFixed(5)}]
+                    </div>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </div>
