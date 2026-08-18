@@ -1,4 +1,3 @@
-import Database from 'better-sqlite3'
 import { Worker } from 'node:worker_threads'
 import { mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -228,7 +227,14 @@ export function getDatabase(): DatabaseAdapter {
       mkdirSync(dbDir, { recursive: true })
     }
 
-    const sqliteDb = new Database(dbPath)
+    let sqliteDb: any
+    try {
+      const Database = require('better-sqlite3')
+      sqliteDb = new Database(dbPath)
+    } catch (e: any) {
+      console.error('[db] Failed to load local SQLite engine (better-sqlite3). If running on serverless, please ensure DATABASE_URL is configured to use PostgreSQL instead.', e)
+      throw new Error(`Failed to load SQLite database engine: ${e.message}`)
+    }
     sqliteDb.pragma('journal_mode = WAL')
     sqliteDb.pragma('foreign_keys = ON')
 

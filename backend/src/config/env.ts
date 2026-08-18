@@ -5,6 +5,9 @@ function required(name: string, fallback?: string): string {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}. Copy backend/.env.example to backend/.env and fill it in.`)
   }
+  if (value === fallback) {
+    console.warn(`[security] WARNING: Using fallback value for environment variable "${name}". Configure this in your Vercel/Appwrite environment variables.`)
+  }
   return value
 }
 
@@ -13,7 +16,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProduction: (process.env.NODE_ENV ?? 'development') === 'production',
   databasePath: process.env.DATABASE_PATH ?? './data/app.db',
-  jwtSecret: required('JWT_SECRET'),
+  jwtSecret: required('JWT_SECRET', 'nextdoor-fallback-session-jwt-signing-secret-key-321-abc'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
   osmrBaseUrl: process.env.OSRM_BASE_URL ?? 'https://router.project-osrm.org',
   corsOrigin: process.env.CORS_ORIGIN?.split(',')
